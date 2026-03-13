@@ -1,0 +1,9 @@
+# PlatformIO build output and cache
+.pio/
+
+# IDE / editor directories
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
