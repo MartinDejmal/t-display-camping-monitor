@@ -91,6 +91,7 @@ bool Storage::retireOldest() {
     if (blocks_.size() <= 1) return false;
     if (!LittleFS.remove(path(blocks_.front()))) return false;
     blocks_.erase(blocks_.begin());
+    summaryCached_ = false;
     return true;
 }
 void Storage::prune(const logger::Record &now) {
@@ -101,8 +102,10 @@ void Storage::prune(const logger::Record &now) {
         if (f && f.size() >= sizeof(last)) {
             f.seek(f.size() - sizeof(last));
             if (f.read(reinterpret_cast<uint8_t *>(&last), sizeof(last)) == sizeof(last) && logger::valid(last)) {
-                uint32_t age;
-                expired = logger::ageSeconds(last, now.session, now.elapsedS, now.epoch, age) && age > HISTORY_SECONDS;
+                // Calendar time may be unset or wrong. Only monotonic time in the
+                // same session is trustworthy for age-based deletion.
+                expired = last.session == now.session && last.elapsedS <= now.elapsedS &&
+                    now.elapsedS - last.elapsedS > HISTORY_SECONDS;
             }
         }
         f.close();
@@ -131,7 +134,10 @@ bool Storage::append(logger::Record record) {
     if (!ok) {
         error_ = "History write failed";
         ready_ = false; // repair once on reboot, never append after a partial write
-    } else error_ = "";
+    } else {
+        error_ = "";
+        if (summaryCached_) includeInSummary(record);
+    }
     return ok;
 }
 void Storage::visit(const std::function<bool(const logger::Record &)> &callback) {
@@ -162,22 +168,29 @@ bool Storage::latest(logger::Record &r) {
     return false;
 }
 void Storage::history(const ClockState &clock, uint32_t seconds, HistoryBin *bins, size_t count) {
+    historyForSession(clock.session(), clock.elapsedS(), seconds, bins, count);
+}
+void Storage::historyForSession(uint32_t session, uint32_t referenceElapsed, uint32_t seconds, HistoryBin *bins, size_t count) {
     for (size_t i = 0; i < count; ++i) bins[i] = {};
-    const auto session = clock.session(), elapsed = clock.elapsedS(), epoch = clock.epoch();
+    if (!seconds || !count) return;
     visit([&](const logger::Record &r) {
-        uint32_t age;
-        if (!logger::ageSeconds(r, session, elapsed, epoch, age) || age >= seconds) return true;
+        if (r.session != session || r.elapsedS > referenceElapsed) return true;
+        uint32_t age = referenceElapsed - r.elapsedS;
+        if (age >= seconds) return true;
         const size_t index = (static_cast<uint64_t>(seconds - 1 - age) * count) / seconds;
         HistoryBin &b = bins[index];
         if (!(r.flags & logger::FLAG_SENSOR_OK)) { b.gap = true; return true; }
         if (b.valid && b.session != r.session) b.gap = true;
         if (!b.valid) {
             b.minT = b.maxT = r.temperature;
+            b.minP = b.maxP = r.pressure;
             b.session = r.session;
             b.valid = true;
         } else {
             b.minT = std::min(b.minT, r.temperature);
             b.maxT = std::max(b.maxT, r.temperature);
+            b.minP = std::min(b.minP, r.pressure);
+            b.maxP = std::max(b.maxP, r.pressure);
         }
         if (!logger::hasHumidity(r)) b.humidityGap = true;
         else if (!b.humidityValid) {
@@ -189,6 +202,40 @@ void Storage::history(const ClockState &clock, uint32_t seconds, HistoryBin *bin
         }
         return true;
     });
+}
+void Storage::includeInSummary(const logger::Record &r) {
+    if (!summary_.count) summary_.first = r;
+    if (!summary_.count || summary_.last.session != r.session) ++summary_.sessionCount;
+    ++summary_.count;
+    summary_.last = r;
+    if (r.flags & logger::FLAG_SENSOR_OK) { ++summary_.good; summary_.lastGood = r; }
+    auto it = std::find_if(summary_.sessions.begin(), summary_.sessions.end(), [&](const SessionSummary &s) { return s.id == r.session; });
+    if (it == summary_.sessions.end()) {
+        if (summary_.sessions.size() >= 64) summary_.sessions.erase(summary_.sessions.begin());
+        SessionSummary session;
+        session.id = r.session;
+        session.firstElapsed = r.elapsedS;
+        if (r.flags & logger::FLAG_UTC) session.firstEpoch = r.epoch;
+        summary_.sessions.push_back(session);
+        it = summary_.sessions.end() - 1;
+    }
+    ++it->count;
+    if (r.flags & logger::FLAG_SENSOR_OK) ++it->good;
+    it->lastElapsed = r.elapsedS;
+    it->lastEpoch = r.flags & logger::FLAG_UTC ? r.epoch : 0;
+}
+const HistorySummary &Storage::summary() {
+    if (!summaryCached_) {
+        summary_ = {};
+        visit([&](const logger::Record &r) { includeInSummary(r); return true; });
+        summaryCached_ = ready_;
+    }
+    return summary_;
+}
+bool Storage::sessionInfo(uint32_t id, SessionSummary &session) {
+    const auto &sessions = summary().sessions;
+    for (const auto &s : sessions) if (s.id == id) { session = s; return true; }
+    return false;
 }
 size_t Storage::used() const { return ready_ ? LittleFS.usedBytes() : 0; }
 size_t Storage::capacity() const { return ready_ ? LittleFS.totalBytes() : 0; }

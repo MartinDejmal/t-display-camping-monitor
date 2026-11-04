@@ -29,6 +29,7 @@ private:
     Reading &reading_;
     WebServer server_{80};
     bool running_ = false, ap_ = false, connected_ = false, routes_ = false;
+    bool ntpStarted_ = false;
     bool uploading_ = false, uploadAuthorized_ = false, uploadOK_ = false;
     bool familySeen_ = false;
     size_t familyMatch_ = 0;
@@ -39,6 +40,9 @@ private:
     void routes();
     void startAP();
     void status();
+    void sessions();
+    void page(const char *id, const char *title, const char *body);
+    bool historyReference(uint32_t &session, uint32_t &elapsed);
     void history();
     void csv();
     void configure();

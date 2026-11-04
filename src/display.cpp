@@ -61,9 +61,9 @@ void Display::values(const Reading &r, float battery, bool external, const Stora
     tft_.drawString(power, 7, 100, 2);
     tft_.drawString(storage.ready() && storage.error().isEmpty() ? "Log OK" : "Log ERROR", 151, 100, 2);
     tft_.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    tft_.drawString("Right: graph   Left: service info", 7, 120, 1);
+    tft_.drawString("Right: graph   Left: info", 7, 120, 1);
 }
-void Display::graph(Storage &storage, const ClockState &clock) {
+void Display::graph(Storage &storage, const ClockState &clock, bool pressure) {
     if (!awake_) return;
     header("Last 8 hours");
     constexpr size_t N = 208;
@@ -71,9 +71,9 @@ void Display::graph(Storage &storage, const ClockState &clock) {
     storage.history(clock, GRAPH_SECONDS, bins, N);
     for (int channel = 0; channel < 2; ++channel) {
         float low = 10000, high = -10000;
-        for (auto &b : bins) if (b.valid && !b.gap && (!channel || (b.humidityValid && !b.humidityGap))) {
-            low = std::min(low, (channel ? b.minH : b.minT) / 100.0f);
-            high = std::max(high, (channel ? b.maxH : b.maxT) / 100.0f);
+        for (auto &b : bins) if (b.valid && !b.gap && (!channel || pressure || (b.humidityValid && !b.humidityGap))) {
+            low = std::min(low, channel ? (pressure ? b.minP : b.minH) / 100.0f : b.minT / 100.0f);
+            high = std::max(high, channel ? (pressure ? b.maxP : b.maxH) / 100.0f : b.maxT / 100.0f);
         }
         bool empty = high < low;
         if (empty) { low = 0; high = 1; }
@@ -82,17 +82,17 @@ void Display::graph(Storage &storage, const ClockState &clock) {
         const uint16_t color = channel ? TFT_CYAN : TFT_ORANGE;
         tft_.setTextColor(color, TFT_BLACK);
         char label[48];
-        snprintf(label, sizeof(label), "%s %.1f .. %.1f", channel ? "RH %" : "T C", low, high);
+        snprintf(label, sizeof(label), "%s %.1f .. %.1f", channel ? (pressure ? "P hPa" : "RH %") : "T C", low, high);
         tft_.drawString(label, 7, top - 13, 1);
         tft_.drawFastHLine(16, top + height, N, TFT_DARKGREY);
-        if (empty) tft_.drawString(channel ? "No humidity data" : "No temperature data", 20, top + 8, 1);
+        if (empty) tft_.drawString("No data in this session", 20, top + 8, 1);
         int lastX = -1, lastY = 0;
         uint32_t lastSession = 0;
         for (size_t i = 0; i < N; ++i) {
             auto &b = bins[i];
-            if (!b.valid || b.gap || (channel && (!b.humidityValid || b.humidityGap))) { lastX = -1; continue; }
-            float min = (channel ? b.minH : b.minT) / 100.0f;
-            float max = (channel ? b.maxH : b.maxT) / 100.0f;
+            if (!b.valid || b.gap || (channel && !pressure && (!b.humidityValid || b.humidityGap))) { lastX = -1; continue; }
+            float min = channel ? (pressure ? b.minP : b.minH) / 100.0f : b.minT / 100.0f;
+            float max = channel ? (pressure ? b.maxP : b.maxH) / 100.0f : b.maxT / 100.0f;
             int y1 = top + height - roundf((max - low) * height / (high - low));
             int y2 = top + height - roundf((min - low) * height / (high - low));
             int x = 16 + i, y = (y1 + y2) / 2;
@@ -106,12 +106,27 @@ void Display::graph(Storage &storage, const ClockState &clock) {
     tft_.drawString("-4h", 112, 117, 1);
     tft_.drawString("now", 206, 117, 1);
 }
-void Display::service(const String &network, const String &ip, const String &password) {
+void Display::device(const ClockState &clock, Storage &storage, uint32_t interval, bool external) {
+    if (!awake_) return;
+    header(FORCE_SERVICE_MODE ? "Device: bench / Wi-Fi ON" : external ? "Device: USB" : "Device: battery");
+    tft_.drawString("Session " + String(clock.session()) + "  +" + String(clock.elapsedS()) + " s", 7, 30, 2);
+    uint64_t now = clock.nowUs(), due = clock.deadline();
+    uint32_t remaining = due > now ? (due - now + 999999) / 1000000 : 0;
+    tft_.drawString("Next " + String(remaining) + " s / " + String(interval) + " s", 7, 52, 2);
+    logger::Record last;
+    String log = !storage.ready() ? "History ERROR" : storage.latest(last) ?
+        (last.session == clock.session() ? "Last log " + String(clock.elapsedS() - last.elapsedS) + " s ago" :
+         "Last log: session " + String(last.session)) : "No records";
+    tft_.drawString(log, 7, 74, 2);
+    tft_.drawString(clock.epoch() ? "UTC available" : "Time: relative only", 7, 96, 2);
+    tft_.drawString("Left: network   Right: values", 7, 120, 1);
+}
+void Display::service(const String &network, const String &ip, const String &password, bool authRequired) {
     if (!awake_) return;
     header(FORCE_SERVICE_MODE ? "BENCH: Wi-Fi always ON" : "USB service");
     tft_.drawString(network.substring(0, 28), 7, 29, 2);
     tft_.drawString(ip, 7, 51, 2);
-    tft_.drawString("User: admin   AP / web password:", 7, 76, 1);
+    tft_.drawString(authRequired ? "User: admin   AP / web password:" : "Web login OFF | Wi-Fi AP password:", 7, 76, 1);
     tft_.drawString(password.length() <= 24 ? password : "Use your saved password", 7, 92, 2);
     tft_.drawString("Right: values", 7, 120, 1);
 }

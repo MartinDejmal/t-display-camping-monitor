@@ -9,8 +9,9 @@ public:
     void sleep();
     bool awake() const { return awake_; }
     void values(const Reading &reading, float battery, bool external, const Storage &storage);
-    void graph(Storage &storage, const ClockState &clock);
-    void service(const String &network, const String &ip, const String &password);
+    void graph(Storage &storage, const ClockState &clock, bool pressure);
+    void device(const ClockState &clock, Storage &storage, uint32_t interval, bool external);
+    void service(const String &network, const String &ip, const String &password, bool authRequired);
     void message(const String &title, const String &text);
 private:
     TFT_eSPI tft_;

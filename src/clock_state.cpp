@@ -58,6 +58,11 @@ void ClockState::syncSystemTime() {
     time_t value = time(nullptr);
     if (value >= 1704067200 && (!epoch() || llabs(static_cast<int64_t>(value) - epoch()) > 2)) sync(value);
 }
+void ClockState::clearUtc() {
+    rtc.epochOffset = 0;
+    timeval tv = {0, 0};
+    settimeofday(&tv, nullptr);
+}
 void ClockState::prepareSleep() {
     rtc.baseUs = nowUs();
     rtc.sleepWallUs = wallUs();

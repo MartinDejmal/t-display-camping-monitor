@@ -6,7 +6,7 @@ Měří standardně jednou za minutu, ukládá historii do interní flash a mezi
 
 ## Stav
 
-Implementace 0.3.0: všechny tři varianty se sestavují, hostitelské testy ověřují formát, časování, úložiště a akce webu. Na COM14 byla ověřena identifikace BMP085/BMP180, dvě minutová měření a čtení uloženého CSV s chybějící vlhkostí. **Funkční BME280, odběry, kompletní OTA na desce a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
+Implementace 0.4.0: všechny tři varianty se sestavují. Hostitelské testy ověřují formát, skutečný kód hodin a úložiště, tlakové grafy, samostatné webové stránky a volitelné přihlášení. Na COM14 byla ověřena identifikace BMP085/BMP180, dvě minutová měření a uložené CSV: první vzorek bez UTC, druhý po synchronizaci ze sítě, stále s odstupem 60 s. **Funkční BME280, odběry, kompletní OTA na desce a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
 
 Nová implementace je ve větvi `main`. Původní funkční příklad zachovává lokální tag `baseline-working-20261104`; zdrojový ZIP, referenční firmware a úplná 4MB záloha původní desky jsou v lokální ignorované složce `work/baseline/`. Zachována je konfigurace displeje; DHT22, externí baterie a původní obrazovky byly nahrazeny.
 
@@ -32,7 +32,7 @@ Displej k sobě, USB dole. Použité popisky přímo na desce:
 
 BMP085 a BMP180 nelze tímto společným ID rozlišit, proto je označení `BMP085/180`. Zapojení používá stejné 3V/G/21/22. Čidlo se nevybírá ručně. BMP280 s ID 0x58 zatím podporovaný není.
 
-U BMP je vlhkost na displeji `RH: n/a`, na webu `Neměří` a v JSON `null` při `has_humidity=false`. Platné teploty a tlaky se normálně ukládají. V grafu zůstává teplota; vlhkost má mezeru, případně zprávu bez dat. Historické BME hodnoty vlhkosti zůstávají dostupné. CSV nechává pole vlhkosti prázdné a přidává `humidity_available` a `sensor_type`.
+U BMP je vlhkost na displeji `RH: n/a`, na webu `Neměří` a v JSON `null` při `has_humidity=false`. Platné teploty a tlaky se normálně ukládají. Na displeji je druhým grafem tlak. Na webu lze vybrat teplotu, tlak nebo vlhkost; chybějící vlhkost má mezeru, případně zprávu bez dat. Historické BME hodnoty vlhkosti zůstávají dostupné. CSV nechává pole vlhkosti prázdné a přidává `humidity_available` a `sensor_type`.
 
 Volitelná detekce externího napájení:
 
@@ -72,7 +72,7 @@ pio run -e ttgo-t-display-usb-sense -t upload
 
 První nahrání nové verze musí proběhnout **přes USB**, protože zavádí novou tabulku oddílů a bootloader. OTA mění pouze aplikaci. Přechod mezi variantami zapojení proveď také přes USB; web OTA odmítne jinou variantu.
 
-**Přechod z 0.2.x na 0.3.0 také proveď přes USB.** Nové záznamy používají schéma v2 a značku kompatibility `RECORD=2`; starý OTA server správně tento obraz odmítne. Velikost záznamu i tabulka oddílů zůstávají stejné, uložená historie a konfigurace se nemažou. Firmware 0.3.0 čte v1 i v2. Downgrade na 0.2.x neumí v2 číst a starý firmware odmítne za takovou historií zapisovat. Při zkušebním startu OTA se nové záznamy zapisují až po potvrzení zdravého startu, aby předchozí verze mohla provést časný rollback.
+**Přechod z 0.2.x na 0.3.0 také proveď přes USB.** Nové záznamy používají schéma v2 a značku kompatibility `RECORD=2`; starý OTA server správně tento obraz odmítne. Velikost záznamu i tabulka oddílů zůstávají stejné, uložená historie a konfigurace se nemažou. Firmware od 0.3.0 čte v1 i v2; aktualizace 0.3.0 → 0.4.0 formát ani oddíly nemění. Downgrade na 0.2.x neumí v2 číst a starý firmware odmítne za takovou historií zapisovat. Při zkušebním startu OTA se nové záznamy zapisují až po potvrzení zdravého startu, aby předchozí verze mohla provést časný rollback.
 
 Historie má 1216 KiB; oba OTA oddíly mají po 1408 KiB. LittleFS se automaticky inicializuje pouze tehdy, když je celý jeho oddíl prázdný (0xFF). Při poškození nebo nekompatibilních starších datech se **neformátuje**. Chyba je vidět jako `Log ERROR` a na webu. Před případnou ruční obnovou zálohuj flash.
 
@@ -81,7 +81,7 @@ Nepoužívej `uploadfs` pro běžnou aktualizaci: souborový oddíl obsahuje his
 ## Ovládání
 
 - Pravé tlačítko probudí a zobrazí čerstvé hodnoty. Další stisky přepínají hodnoty a dva grafy posledních 8 hodin.
-- Levé tlačítko zobrazí servisní informace, síť, adresu a heslo.
+- Levé tlačítko přepíná stav zařízení (napájení, relace, další měření, poslední zápis, čas) a servisní informace (síť, adresa a heslo). Pravé vrátí hodnoty.
 - Po 15 s od posledního stisku displej zhasne. Na baterii následuje deep sleep, na USB web běží dál.
 - Časovač změří, uloží a opět uspí zařízení bez rozsvícení.
 - Držené pravé tlačítko nevyvolává okamžitou smyčku probouzení: dokud je držené, používá se pouze krátký časovač.
@@ -90,23 +90,38 @@ Ve finální variantě se připojení USB pozná při nejbližším měřicím p
 
 ## Web
 
-Při prvním servisu vznikne síť `tdisplay-xxxxxx`. Náhodné heslo se uloží do NVS. **Heslo AP i webu ukáže levé tlačítko**, webový uživatel je `admin`. Adresa AP je standardně `http://192.168.4.1`; řiď se displejem.
+Při prvním servisu vznikne síť `tdisplay-xxxxxx`. Náhodné heslo se uloží do NVS. **Heslo AP i webu ukáže servisní obrazovka levého tlačítka**, webový uživatel je `admin`. Adresa AP je standardně `http://192.168.4.1`; řiď se displejem.
 
-Po nastavení domácí Wi-Fi se zařízení připojí k ní. Pokud připojení do 15 s nevyjde nebo síť později vypadne, vytvoří záložní AP. mDNS v LAN: `tdisplay-xxxxxx.local`. Aktivované záložní AP zůstává až do restartu nebo odpojení USB.
+Po nastavení domácí Wi-Fi se zařízení připojí k ní. Pokud připojení do 15 s nevyjde nebo síť později vypadne, vytvoří záložní AP. mDNS v LAN: `tdisplay-xxxxxx.local`. Aktivované záložní AP zůstává až do restartu nebo odpojení USB. V servisu je uspávání rádia Wi-Fi vypnuté kvůli odezvě HTTP/OTA; na baterii se Wi-Fi vypne úplně.
 
-Web nabízí hodnoty a stav zařízení; graf 8 h / 24 h / 7 dní / 30 dní s min/max; CSV za rozsah nebo vše; interval 60–3600 s, jas 1–255, timeout 5–120 s, Wi-Fi a heslo; import/export konfigurace bez hesel; čas z prohlížeče nebo NTP; OTA nahráním `.pio/build/<environment>/firmware.bin`.
+Navigace obsahuje samostatné stránky, každá má vlastní URL a načte se ze zařízení:
+
+| Záložka | URL | Obsah |
+|---|---|---|
+| Přehled | `/` | Aktuální hodnoty a základní stav |
+| Historie | `/history` | Teplota / tlak / vlhkost, min/max, 8 h / 24 h / 7 dní / 30 dní; výběr relace a CSV |
+| Zařízení | `/device` | Napájení, senzor, další měření, poslední zápis, počet a rozsah záznamů, úložiště |
+| Nastavení | `/settings` | Měření, displej, síť, přístup, import/export bez hesel a restart |
+| Čas | `/time` | Stav UTC, NTP, nastavení z prohlížeče nebo provoz jen s relativním časem |
+| Firmware | `/firmware` | OTA souborem `.pio/build/<environment>/firmware.bin` |
+
+Interval lze nastavit na 60–3600 s, jas 1–255 a timeout 5–120 s. Historie nabízí posledních 64 uložených relací; úplné CSV zahrnuje i starší dochované relace.
 
 Konfigurace se validuje a zapisuje jako jediný NVS blob. Prázdné pole hesla ponechá existující heslo; otevřenou Wi-Fi lze nastavit explicitní prázdnou hodnotou přes API. Import nejprve vyplní formulář. Změna sítě a AP hesla vyžaduje restart; webové heslo platí ihned. Dlouhé vlastní heslo displej nevypisuje celé.
 
-Použita je HTTP Basic autentizace a náhodný CSRF token pro změny. POST vyžadují servisní napájení. HTTP nemá TLS; rozhraní je určeno do důvěryhodné místní sítě, nikoli k vystavení na internet.
+HTTP Basic autentizace je ve výchozím stavu zapnutá a lze ji vypnout v Nastavení → Přístup k webu. Přepínač platí i pro CSV a OTA; heslo webu a chráněného AP se zachová, AP tím nevznikne otevřené. Náhodný CSRF token se pro změny vyžaduje i bez přihlášení. POST vyžadují servisní napájení. HTTP nemá TLS; rozhraní je určeno do důvěryhodné místní sítě, nikoli k vystavení na internet.
 
 ## Historie, čas a baterie
 
 Záznam má 24 B, formát v2 a CRC16-CCITT; čtení zůstává kompatibilní s v1. Obsahuje relaci, uplynulé sekundy, volitelné UTC, teplotu po 0,01 °C, vlhkost po 0,01 % RH, tlak v Pa a příznaky typu čidla a dostupnosti vlhkosti. Bez vlhkosti je uloženo 0xFFFF a její příznak není nastavený. U v1 platné měření znamená BME280 s vlhkostí, včetně skutečných 0 %. Rozlišení záznamu není přesností senzoru.
 
-Minutový interval: 34 560 B/den, přibližně 1,04 MB/30 dní plus režie. Nejstarší bloky se odstraňují podle času nebo při zaplnění 90 % kapacity. Retence je přibližná, po blocích až 1440 záznamů; může být o blok delší nebo zkrácená režií. U starých relací bez UTC rozhoduje kapacita, protože skutečné stáří neznáme.
+Minutový interval: 34 560 B/den, přibližně 1,04 MB/30 dní plus režie. Nejstarší bloky se odstraňují podle uplynulého času ve stejné relaci nebo při zaplnění 90 % kapacity. Retence je přibližná, po blocích až 1440 záznamů; může být o blok delší nebo zkrácená režií. U předchozích relací rozhoduje kapacita, protože skutečné stáří přes výpadek napájení neznáme. UTC se pro mazání nepoužívá; chybně nastavené datum tak historii nezestárne.
 
-RTC čas pokračuje přes deep sleep, včetně předčasného probuzení tlačítkem. UTC se získá NTP nebo z prohlížeče. Po resetu/odpojení baterie vznikne nová relace. Záznamy bez UTC se zpětně nepřepisují; úplný CSV je zachová s prázdným UTC. Graf aktuální relace používá uplynulý čas; předchozí relace zařadí pouze se známým UTC. Výpadky a chyby senzoru vytvářejí mezery.
+**Správné datum není podmínkou správného měření, intervalů ani historie.** Plán a grafy používají monotónně uplynulé sekundy v jedné relaci. RTC čas pokračuje přes deep sleep, včetně předčasného probuzení tlačítkem. Změna UTC plán neposune.
+
+UTC je volitelný popisek získaný NTP nebo z prohlížeče. NTP lze vypnout a tlačítkem „Používat jen relativní čas“ také odstranit aktuální UTC. Záznamy bez UTC se zpětně nepřepisují; CSV ponechá datum prázdné. Dříve uložené datum se změnou nastavení nemění.
+
+Po resetu/odpojení baterie vznikne nová relace. Délku vypnutí bez externích hodin nelze zjistit, proto se různé relace nespojují do zdánlivě souvislého grafu ani podle UTC. Starší relaci lze vybrat i bez data; její graf končí posledním uloženým vzorkem. CSV za rozsah filtruje podle relativního času vybrané relace, úplné CSV zachová všechny. Výpadky a chyby senzoru vytvářejí mezery.
 
 Úložiště opravuje neúplný konec zápisu, přeskakuje chybné CRC a odmítne zapisovat za kompletní záznam neznámé verze. Po chybě zápisu zastaví logování do dalšího startu. Chybějící senzor neblokuje web a uloží se jako neplatné měření.
 
@@ -137,6 +152,6 @@ pio run -e ttgo-t-display -e ttgo-t-display-usb-sense -e ttgo-t-display-service
 python tools/check.py
 ```
 
-Host kontroly potřebují C++11 `g++` a Node.js; mimo PATH použij `--cxx <cesta>` a `--node <cesta>`. Spouštějí skutečný kód formátu, plánování a úložiště nad souborovým testovacím prostředím a skutečný JS webu nad simulovaným API. Nepotvrzují chování flash, ADC, Wi-Fi ani spánku na ESP32.
+Host kontroly potřebují C++11 `g++` a Node.js; mimo PATH použij `--cxx <cesta>` a `--node <cesta>`. Spouštějí skutečný kód formátu, hodin, plánování a úložiště nad souborovým testovacím prostředím a skutečný JS webu nad simulovaným API. Nepotvrzují chování flash, ADC, Wi-Fi ani spánku na ESP32.
 
 GitHub Actions sestaví všechny varianty, provede kontroly a uloží firmware, bootloader a tabulku oddílů jako artefakty. Viz [plán ověření na desce](docs/VALIDATION.md) a [přehled implementace](docs/IMPLEMENTATION.md).

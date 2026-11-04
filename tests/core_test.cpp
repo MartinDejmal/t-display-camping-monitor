@@ -1,5 +1,6 @@
 #include "record.h"
 #include "ota_marker.h"
+#include "access_policy.h"
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -86,5 +87,10 @@ int main() {
     std::string wrong = "|TDLOGGER:ORIGINAL:USB=0:BENCH=1:RECORD=2:PART=1|";
     feedOtaMarker(reinterpret_cast<const uint8_t*>(wrong.data()),wrong.size(),marker,matched,found);
     assert(!found);
+    assert(loginAllowed(true, true));
+    assert(!loginAllowed(true, false));
+    assert(loginAllowed(false, false) && loginAllowed(false, true));
+    assert(writeAllowed(true, true));
+    assert(!writeAllowed(false, true) && !writeAllowed(true, false) && !writeAllowed(false, false));
     std::cout << "Core: CRC, schema, deadlines, early wake, time gaps, OTA marker/chunk boundaries OK\n";
 }

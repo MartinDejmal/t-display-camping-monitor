@@ -10,6 +10,7 @@ struct ClockState {
     uint64_t deadline() const;
     void setDeadline(uint64_t us);
     void sync(uint32_t epoch);
+    void clearUtc();
     void syncSystemTime();
     void prepareSleep();
 };

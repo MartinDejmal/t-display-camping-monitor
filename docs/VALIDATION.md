@@ -47,6 +47,18 @@ Po výměně uživatelem za jiný modul (pravděpodobně BMP180) byla na COM14 o
 - Sériový příkaz `v` dvakrát přečetl poslední uložený záznam. CSV obsahovalo platné T/P, prázdné RH, sensor_ok=1, humidity_available=0 a sensor_type=BMP085/180. Kontrolní skript ověřil postupující čas a rozumné rozsahy hodnot.
 - Záznam skutečného testu je lokálně v `work/bmp-live-verification.log`. Kontrola webu se zatím opírá o hostitelský test JS/API; fyzický BME280 a celé OTA nadále zbývá ověřit.
 
+## Web, tlakové grafy a relativní čas ve 0.4.0 — 5. 11. 2026
+
+- Všechny tři varianty sestaveny: baterie a servis 1 058 048 B, USB sense 1 058 128 B; OTA slot má 1 441 792 B. RAM 60 920 B. Host kontroly prošly.
+- Skutečný kód hodin nad testovacím RTC ověřil chybějící UTC, posun dopředu/dozadu, vymazání UTC, NTP změny, předčasné probuzení ze spánku a novou relaci po resetu. Intervaly a monotónní čas se při změně UTC neposunuly.
+- Skutečné úložiště ověřilo tlaková minima/maxima, výběr starších relací bez UTC, průběžné souhrny a zachování historie při nesmyslném budoucím datu jiné relace. Retence i graf používají relativní čas jedné relace.
+- Webový test používá skutečných šest HTML fragmentů a skutečný JS. Ověřil stránky, graf tlaku/0 % RH/chybějící RH, volbu relace, údaje zařízení, částečné změny konfigurace, import bez hesel, přepínač přihlášení a ruční/relativní čas. Samostatný test politiky přístupu ověřil oba režimy přihlášení a nutnost napájení + CSRF pro zápis.
+- V prohlížeči vizuálně ověřeny Historie (včetně přepnutí na tlak), Zařízení, Čas a Nastavení nad skutečnými šablonami s jasně označenými ukázkovými daty. Nejde o fyzický test formulářů na desce.
+- Servisní varianta 0.4.0 nahrána přes COM14, hash zápisu ověřen; historie i konfigurace se načetly. V 68s testu dva platné BMP vzorky: elapsed=0, T=22,30 °C, P=98 552 Pa bez UTC; elapsed=60, T=22,20 °C, P=98 538 Pa s UTC ze sítě. Oba `sensor=ok log=ok`, RH=NA; sériové CSV potvrzuje uložené hodnoty.
+- Na LAN 192.168.0.120 ověřeny odpovědi všech šesti stránek, CSS/JS a statusu podle aktuálního přepínače přihlášení. Status, seznam relací a aktuální historie vrátily skutečné počty, session_elapsed a sedmiprvkové koše s tlakem; při delší kontrole se objevily síťové timeouty a ping ztratil 7 z 8 paketů. V servisním režimu proto vypnuto uspávání rádia Wi-Fi; na baterii se Wi-Fi nadále vypíná úplně.
+- Po vypnutí uspávání Wi-Fi: 8/8 pingů, 6–58 ms; celý skutečný HTTP test prošel (status, relace, tlakové koše, výběr předchozí relace, stránky a prostředky) s odpověďmi 0,06–0,23 s. Změna zlepšila aktuálně pozorované spojení; dlouhodobou stabilitu je nutné sledovat.
+- Záznamy kontrol jsou lokálně v `work/tabs-http-verification.log`, `work/tabs-checks.log`, `work/tabs-build.log`, `work/tabs-upload.log` a `work/tabs-live-verification.log`. Kompletní OTA/rollback, spotřeba a bateriová výdrž stále nejsou ověřené.
+
 ## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.

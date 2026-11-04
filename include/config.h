@@ -29,6 +29,8 @@ struct Settings {
     uint32_t intervalS = DEFAULT_INTERVAL_S;
     uint16_t screenTimeoutS = 15;
     uint8_t brightness = 120;
+    bool authEnabled = true;
+    bool autoTime = true;
     String ssid;
     String wifiPassword;
     String adminPassword;

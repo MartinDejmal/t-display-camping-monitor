@@ -28,7 +28,7 @@ float battery = NAN;
 bool settingsOK = false;
 uint32_t lastActivity = 0, lastLive = 0, lastServiceDraw = 0;
 uint32_t appliedInterval = DEFAULT_INTERVAL_S;
-enum class View { Values, Graph, Service };
+enum class View { Values, Graph, Device, Service };
 View view = View::Values;
 
 class Button {
@@ -54,9 +54,10 @@ Button right(PIN_BTN_RIGHT), left(PIN_BTN_LEFT);
 void render() {
     if (!display.awake()) return;
     switch (view) {
-    case View::Graph: display.graph(storage, clockState); break;
+    case View::Graph: display.graph(storage, clockState, reading.type == SensorType::Bmp085180); break;
+    case View::Device: display.device(clockState, storage, settings.intervalS, power.external()); break;
     case View::Service:
-        if (service.running()) display.service(service.network(), service.ip(), settings.adminPassword);
+        if (service.running()) display.service(service.network(), service.ip(), settings.adminPassword, settings.authEnabled);
         else display.message("Service unavailable", USB_SENSE_WIRED ? "Connect USB power" : "USB sense not fitted");
         break;
     default: display.values(reading, battery, power.external(), storage); break;
@@ -198,17 +199,17 @@ void loop() {
     if (!power.external() && service.running() && !service.updating()) service.stop();
     sampleDue();
     if (right.pressed()) {
-        if (!display.awake() || view == View::Service) wakeUI(View::Values, true);
+        if (!display.awake() || view == View::Service || view == View::Device) wakeUI(View::Values, true);
         else wakeUI(view == View::Values ? View::Graph : View::Values, view == View::Graph);
     }
-    if (left.pressed()) wakeUI(View::Service, false);
+    if (left.pressed()) wakeUI(view == View::Device ? View::Service : View::Device, false);
     if (display.awake() && !service.updating()) {
         if (view == View::Values && millis() - lastLive >= 5000) {
             reading = sensor.measure();
             lastLive = millis();
             render();
         }
-        if (view == View::Service && millis() - lastServiceDraw > 1000) {
+        if ((view == View::Service || view == View::Device) && millis() - lastServiceDraw > 1000) {
             lastServiceDraw = millis(); render();
         }
         if (millis() - lastActivity >= settings.screenTimeoutS * 1000UL) display.sleep();

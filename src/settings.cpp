@@ -17,6 +17,8 @@ bool saveSettings(const Settings &s) {
     doc["interval_s"] = s.intervalS;
     doc["screen_timeout_s"] = s.screenTimeoutS;
     doc["brightness"] = s.brightness;
+    doc["auth_enabled"] = s.authEnabled;
+    doc["auto_time"] = s.autoTime;
     doc["ssid"] = s.ssid;
     doc["wifi_password"] = s.wifiPassword;
     doc["admin_password"] = s.adminPassword;
@@ -45,6 +47,8 @@ bool loadSettings(Settings &s) {
     s.intervalS = doc["interval_s"] | DEFAULT_INTERVAL_S;
     s.screenTimeoutS = doc["screen_timeout_s"] | 15;
     s.brightness = doc["brightness"] | 120;
+    s.authEnabled = doc["auth_enabled"] | true;
+    s.autoTime = doc["auto_time"] | true;
     s.ssid = doc["ssid"].as<String>();
     s.wifiPassword = doc["wifi_password"].as<String>();
     s.adminPassword = doc["admin_password"].as<String>();

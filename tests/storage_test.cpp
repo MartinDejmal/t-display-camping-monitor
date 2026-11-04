@@ -92,16 +92,38 @@ int main(int argc,char **argv) {
     {FILE *f=fopen((fakeRoot+"/b00000001.bin").c_str(),"wb");fwrite(&old,1,sizeof(old),f);fclose(f);}
     Storage mixed;assert(mixed.begin());
     auto bmp=record(120); bmp.flags=logger::FLAG_SENSOR_OK | logger::TYPE_BMP085180;
+    bmp.pressure=98574;
     bmp.humidity=logger::HUMIDITY_UNAVAILABLE;
     assert(mixed.append(bmp));assert(mixed.append(record(180)));
     testNow=240ULL*1000000;
     HistoryBin separate[4]; mixed.history(clock,240,separate,4);
     assert(separate[0].valid && separate[0].humidityValid && !separate[0].humidityGap && separate[0].minH==0);
     assert(separate[1].valid && !separate[1].gap && !separate[1].humidityValid && separate[1].humidityGap);
+    assert(separate[1].minP==98574 && separate[1].maxP==98574);
     assert(separate[2].valid && separate[2].humidityValid && !separate[2].humidityGap);
     mixed.history(clock,240,bins,1);
     assert(bins[0].valid && !bins[0].gap && bins[0].humidityGap);
     Storage reopened;assert(reopened.begin());
     assert(reopened.latest(last) && logger::hasHumidity(last));
+    assert(reopened.summary().count==3 && reopened.summary().good==3 && reopened.summary().sessionCount==1);
+    assert(reopened.summary().first.elapsedS==60 && reopened.summary().last.elapsedS==180);
+    assert(reopened.append(record(240)));
+    assert(reopened.summary().count==4 && reopened.summary().last.elapsedS==240);
+    auto other=record(1);other.session=2;other.epoch=2100000000;other.flags|=logger::FLAG_UTC;
+    other.temperature=8000;other.pressure=90000;
+    assert(reopened.append(other));
+    assert(reopened.summary().count==5 && reopened.summary().sessionCount==2);
+    SessionSummary session;
+    assert(reopened.sessionInfo(1,session) && session.count==4 && session.firstElapsed==60 && session.lastElapsed==240);
+    assert(reopened.sessionInfo(2,session) && session.count==1 && session.lastElapsed==1);
+    reopened.historyForSession(1,240,3600,bins,1);
+    assert(bins[0].valid && bins[0].maxT==-1250 && bins[0].minP==98574); // no joining by wrong UTC
+    reopened.historyForSession(2,1,3600,bins,1);
+    assert(bins[0].valid && bins[0].maxT==8000 && bins[0].minP==90000);
+    fixture(base,"wrong-date");
+    Storage timeless;assert(timeless.begin());
+    for(uint32_t i=0;i<1440;++i){auto r=record(i*60);r.epoch=1704067200+i*60;r.flags|=logger::FLAG_UTC;assert(timeless.append(r));}
+    assert(timeless.append(other));
+    assert(timeless.used()==1441*24); // a different session's wrong date must not purge history
     std::cout<<"Storage: erased provisioning, no format on corruption, torn writes, CRC recovery, schema protection, rotation, expiry, graph gaps OK\n";
 }

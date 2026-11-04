@@ -62,11 +62,17 @@ def main():
                     "-o", str(storage_exe)], check=True, env=compiler_env)
     fixture = tempfile.mkdtemp(prefix="storage-", dir=work)
     subprocess.run([str(storage_exe), fixture], check=True, env=compiler_env)
+    clock_exe = work / ("clock-test.exe" if sys.platform == "win32" else "clock-test")
+    subprocess.run([args.cxx, "-std=c++11", "-Wall", "-Wextra", "-static",
+                    "-I", str(ROOT / "tests/clock_fakes"), "-I", str(ROOT / "tests/fakes"),
+                    "-I", str(ROOT / "include"), str(ROOT / "tests/clock_test.cpp"),
+                    str(ROOT / "src/clock_state.cpp"), "-o", str(clock_exe)], check=True, env=compiler_env)
+    subprocess.run([str(clock_exe)], check=True, env=compiler_env)
     ui = (ROOT / "include/web_ui.h").read_text(encoding="utf-8")
-    source = re.search(r"<script>(.*?)</script>", ui, re.S).group(1)
+    source = re.search(r'const char WEB_JS\[\] PROGMEM = R"JS\((.*?)\)JS";', ui, re.S).group(1)
     (work / "ui.js").write_text(source, encoding="utf-8")
     subprocess.run([args.node, "--check", str(work / "ui.js")], check=True)
-    subprocess.run([args.node, str(ROOT / "tests/web_test.cjs"), str(work / "ui.js")], check=True)
+    subprocess.run([args.node, str(ROOT / "tests/web_test.cjs"), str(work / "ui.js"), str(ROOT / "include/web_ui.h")], check=True)
     partitions()
     print("All host checks passed")
 

@@ -8,12 +8,12 @@
 | 4. Měření a plán | Automaticky BME280 / BMP085/BMP180, minutový plán, RTC relace, chyby | Čerstvost a hodnoty BME, čas |
 | 5. Historie | CRC, rotace, oprava konce, ochrana před formátem | Reálné odpojení při zápisu |
 | 6. Ovládání | Tlačítka, timeout, nezávislý plán, nízká baterie | Debounce, držené tlačítko, ADC |
-| 7. Graf | T/RH, 8 h, min/max, mezery | Čitelnost |
+| 7. Graf | T + RH nebo tlak, 8 h, min/max, mezery | Čitelnost |
 | 8. Servis | STA + AP, hystereze VBUS, návrat na baterii | Přechody napájení a sítě |
-| 9. Web | Historie, CSV, konfigurace, import/export, čas, přihlášení | Reálný prohlížeč a souběh exportu |
+| 9. Web | Šest samostatných stránek, historie relací, stav, CSV, konfigurace, čas, volitelné přihlášení | Reálný prohlížeč a souběh exportu |
 | 10. OTA a výdrž | Dual slot, aplikační guard, CI a host testy | Skutečné OTA/rollback, spotřeba a 72 h |
 
-Implementace byla publikována do `main` a servisní varianta 0.2.0 nahrána přes COM14. Sériový start potvrdil funkční úložiště a konfiguraci; BME280 zatím není připojený. Podrobnosti jsou v VALIDATION.md. Aplikační guard je odchylka od původně zamýšleného rollbacku bootloaderu; omezení jsou v README.
+Aktuální servisní varianta 0.4.0 je nahraná na COM14. BMP085/180 měří a ukládá; konfigurace a historie se načetly. Dva vzorky po 60 s potvrdily zachování plánu i při přechodu z neznámého UTC na čas ze sítě. Podrobnosti jsou v VALIDATION.md. Aplikační guard má omezení popsaná v README.
 
 ## Moduly
 
@@ -21,7 +21,7 @@ Implementace byla publikována do `main` a servisní varianta 0.2.0 nahrána př
 - `clock_state.*`: RTC s CRC, skutečný čas spánku, UTC offset.
 - `record.h`: v1/v2 formát, CRC, CSV a časové funkce bez Arduino závislostí.
 - `sensor.*`, `sensor_type.h`: automatické rozpoznání BME280 a BMP085/BMP180, I2C a validace.
-- `storage.*`: LittleFS, blokový log, obnova, retence a agregace.
+- `storage.*`: LittleFS, blokový log, obnova, retence podle relativního času, agregace T/RH/P a líně vytvářený souhrn historie/posledních 64 relací. Bateriové starty souhrn zbytečně neskenují.
 - `power.*`: VBUS a měření společné napájecí větve.
 - `display.*`: ST7789, hodnoty, graf a servisní informace.
 - `settings.*`: konfigurace v jednom NVS blobu.
@@ -30,17 +30,19 @@ Implementace byla publikována do `main` a servisní varianta 0.2.0 nahrána př
 
 ## API
 
-Všechny endpointy vyžadují Basic přihlášení `admin`. POST navíc vyžadují `X-CSRF-Token` z `/api/status` a servisní napájení.
+Při `auth_enabled=true` všechny endpointy vyžadují Basic přihlášení `admin`; výchozí hodnota je true i při načtení staré konfigurace. POST při obou režimech vyžadují `X-CSRF-Token` z `/api/status` a servisní napájení.
 
 | Metoda | Cesta | Obsah |
 |---|---|---|
-| GET | `/` | Web |
-| GET | `/api/status` | Hodnoty, sensor_type, has_humidity, čas, kapacita, veřejná konfigurace, CSRF; nedostupná humidity=null |
-| GET | `/api/history?hours=8` | 480 košů: minT,maxT,minRH,maxRH,session; celý výpadek=null, chybějící RH=null pouze na jejích dvou pozicích |
+| GET | `/`, `/history`, `/device`, `/settings`, `/time`, `/firmware` | Samostatné stránky s navigačními záložkami |
+| GET | `/assets/app.css`, `/assets/app.js` | Společné lokální prostředky |
+| GET | `/api/status` | Hodnoty, čidlo, napájení, čas/relace, další měření, poslední zápis a platné měření, počty/rozsah historie, kapacita, veřejná konfigurace a CSRF; nedostupná humidity=null |
+| GET | `/api/history?hours=8&session=N` | 480 košů: minT,maxT,minRH,maxRH,session,minP_hPa,maxP_hPa; výpadek=null, chybějící RH=null na jejích pozicích. Session volitelná, výchozí aktuální. Metadata time_basis=session_elapsed, reference_elapsed_s |
+| GET | `/api/sessions` | Celkový počet a posledních 64 relací s počty a rozsahem elapsed/UTC |
 | GET | `/api/export.csv` | Vše včetně chyb senzoru |
-| GET | `/api/export.csv?hours=24` | Rozsah s určitelným časem; 1–720 hodin |
-| POST | `/api/config` | interval_s, screen_timeout_s, brightness, ssid; volitelně wifi_password, admin_password, clear_wifi |
-| POST | `/api/time` | `{ "epoch": <UTC seconds> }` |
+| GET | `/api/export.csv?hours=24` | Rozsah relativního času aktuální nebo zadané relace (session=N); 1–720 hodin |
+| POST | `/api/config` | Částečná změna: interval_s, screen_timeout_s, brightness, ssid, auth_enabled, auto_time, wifi_password, admin_password, clear_wifi; ostatní pole se zachovají |
+| POST | `/api/time` | `{ "epoch": <UTC seconds> }` nebo `{ "clear": true }` (vymaže UTC a vypne NTP, zachová monotónní čas) |
 | POST | `/api/restart` | Restart po odeslání odpovědi |
 | POST | `/api/update` | Multipart soubor v poli firmware |
 
