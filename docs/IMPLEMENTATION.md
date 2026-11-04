@@ -13,7 +13,7 @@
 | 9. Web | Historie, CSV, konfigurace, import/export, čas, přihlášení | Reálný prohlížeč a souběh exportu |
 | 10. OTA a výdrž | Dual slot, aplikační guard, CI a host testy | Skutečné OTA/rollback, spotřeba a 72 h |
 
-V této fázi nebylo nic nahráváno do zařízení ani publikováno na GitHub. Aplikační guard je odchylka od původně zamýšleného rollbacku bootloaderu; omezení jsou v README.
+Implementace byla publikována do `main` a servisní varianta 0.2.0 nahrána přes COM14. Sériový start potvrdil funkční úložiště a konfiguraci; BME280 zatím není připojený. Podrobnosti jsou v VALIDATION.md. Aplikační guard je odchylka od původně zamýšleného rollbacku bootloaderu; omezení jsou v README.
 
 ## Moduly
 

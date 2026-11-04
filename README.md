@@ -8,7 +8,7 @@ Měří standardně jednou za minutu, ukládá historii do interní flash a mezi
 
 Implementace 0.2.0: všechny tři varianty se sestavují, hostitelské testy ověřují formát, časování, úložiště a akce webu. **Fyzické zapojení, odběry, OTA na desce a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
 
-Původní funkční příklad zachovává lokální tag `baseline-working-20261104`; nová implementace vzniká ve větvi `firmware-logger`. Zachována je konfigurace displeje; DHT22, externí baterie a původní obrazovky byly nahrazeny.
+Nová implementace je ve větvi `main`. Původní funkční příklad zachovává lokální tag `baseline-working-20261104`; zdrojový ZIP, referenční firmware a úplná 4MB záloha původní desky jsou v lokální ignorované složce `work/baseline/`. Zachována je konfigurace displeje; DHT22, externí baterie a původní obrazovky byly nahrazeny.
 
 ## Zapojení
 

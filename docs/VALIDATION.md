@@ -1,6 +1,16 @@
 # Ověření na skutečném T-Display
 
-Položky fyzického ověření zatím nejsou splněné.
+Fyzické ověření je částečně zahájené; dosud potvrzené body jsou níže. Spotřeba a kompletní funkční zkoušky zbývají.
+
+## První nahrání — 4. 11. 2026
+
+- Před nahráním vytvořena úplná záloha původní 4MiB flash z COM14 v lokální `work/baseline/device-COM14-before.bin`. SHA256: `7e77368f034b8bd7ccbd63fceef59f76694340e3901ff51ddb80bd3ffe6d6e72`.
+- Zdrojový ZIP revize 826f932 a původní referenční firmware jsou ve stejné ignorované složce.
+- Na COM14 detekován ESP32-D0WDQ6 revize 1.0. Nový oddíl pro historii byl před nahráním prázdný.
+- Nahrána servisní varianta 0.2.0, bootloader i nová tabulka oddílů. Kontrola hashů zápisu prošla.
+- Po hard resetu sériový výstup potvrdil `bench=1 history=ok settings=ok` a `sensor=missing log=ok`. Chybějící BME280 odpovídá dosud neprovedenému zapojení.
+- Sériový záznam je lokálně v `work/service-boot-COM14.log`. Web, skutečné hodnoty senzoru, displej a spotřeba tímto nejsou ověřené.
+- GitHub Actions pro kódový commit `2f7b414` dokončily sestavení a hostitelské kontroly úspěšně také na Linuxu.
 
 ## Provedené hostitelské kontroly — 4. 11. 2026
 
@@ -17,7 +27,7 @@ Tato ověření nenahrazují níže uvedené testy na skutečném zařízení.
 
 ## Před pájením: USB a servisní varianta
 
-- [ ] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.
+- [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.
 - [ ] Ověřit displej a tlačítka, graf a servisní údaje.
 - [ ] Bez BME280 vidět chybu senzoru; web musí fungovat.
 - [ ] Připojit AP a admin; ověřit CSV s příznakem chybějícího čidla.
