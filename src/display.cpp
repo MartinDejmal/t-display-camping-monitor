@@ -52,7 +52,7 @@ void Display::values(const Reading &r, float battery, bool external, const Stora
     } else {
         tft_.setTextColor(TFT_ORANGE, TFT_BLACK);
         tft_.drawString("BME280 unavailable", 7, 42, 2);
-        tft_.drawString("Check 3V / G / 21 / 22", 7, 64, 2);
+        tft_.drawString(r.error.isEmpty() ? "Check 3V / G / 21 / 22" : r.error, 7, 64, 2);
     }
     tft_.setTextColor(storage.ready() && storage.error().isEmpty() ? TFT_LIGHTGREY : TFT_RED, TFT_BLACK);
     String power = external ? "USB / service" : isfinite(battery) ? String(battery, 2) + " V" : "Battery unknown";

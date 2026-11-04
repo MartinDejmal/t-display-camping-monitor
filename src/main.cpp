@@ -163,6 +163,11 @@ void setup() {
         USB_SENSE_WIRED, FORCE_SERVICE_MODE, storage.ready() ? "ok" : storage.error().c_str(), settingsOK ? "ok" : "error");
 }
 void loop() {
+    if (Serial.available() && Serial.read() == 'i' && !service.updating() && !ota.trial()) {
+        sensor.diagnose();
+        reading = sensor.measure();
+        render();
+    }
     if (power.poll()) {
         if (power.external() && settingsOK) {
             service.begin();

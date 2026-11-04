@@ -117,6 +117,9 @@ void Service::status() {
     doc["external"] = power_.external();
     doc["network"] = network();
     doc["sensor_ok"] = reading_.valid;
+    doc["sensor_error"] = reading_.error;
+    doc["sensor_address"] = reading_.address;
+    doc["sensor_chip_id"] = reading_.chipId;
     if (reading_.valid) {
         doc["temperature"] = reading_.temperature;
         doc["humidity"] = reading_.humidity;

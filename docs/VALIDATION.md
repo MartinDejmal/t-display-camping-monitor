@@ -25,7 +25,15 @@ Fyzické ověření je částečně zahájené; dosud potvrzené body jsou níž
 
 Tato ověření nenahrazují níže uvedené testy na skutečném zařízení.
 
-## Před pájením: USB a servisní varianta
+## Diagnostika připájeného BME280 — 4. 11. 2026
+
+Modul uživatele: LaskaKit LA131017, výchozí adresa 0x77, vlastní pull-up rezistory. Na COM14 otestovány obě adresy, přímé čtení ID, dvě rychlosti a prohození SDA/SCL. Hardwarový řadič vracel Wire=5 (timeout); nebylo možné přečíst ID.
+
+Při testu mimo hardwarový I2C řadič: GPIO21 šel stáhnout do nuly, GPIO22 zůstal v jedničce i při příkazu stáhnout jej přes open-drain. Stejné chování GPIO22 potvrdila zkouška v obrácené roli SDA. Softwarové I2C neobdrželo ACK na 0x76 ani 0x77. To ukazuje na elektrický problém kolem pinu 22/SCL, například spoj s napájením nebo vadný vývod; přesnou příčinu je nutné ověřit měřením a izolováním vodiče. Zda jde o závadu modulu, pájení, vodiče nebo desky, zatím není potvrzeno.
+
+FW 0.2.1 doplňuje diagnostiku a zastavení komunikace při chybě linek. Průběžný záznam diagnostiky je lokálně v `work/sensor-diagnostic-COM14.log`. Zbývá kontrola zapojení uživatelem a ověření finální verze po opětovném připojení COM14.
+
+## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.
 - [ ] Ověřit displej a tlačítka, graf a servisní údaje.

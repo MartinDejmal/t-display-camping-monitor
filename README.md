@@ -6,7 +6,7 @@ Měří standardně jednou za minutu, ukládá historii do interní flash a mezi
 
 ## Stav
 
-Implementace 0.2.0: všechny tři varianty se sestavují, hostitelské testy ověřují formát, časování, úložiště a akce webu. **Fyzické zapojení, odběry, OTA na desce a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
+Implementace 0.2.1: všechny tři varianty se sestavují, hostitelské testy ověřují formát, časování, úložiště a akce webu. **Fyzické zapojení, odběry, OTA na desce a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
 
 Nová implementace je ve větvi `main`. Původní funkční příklad zachovává lokální tag `baseline-working-20261104`; zdrojový ZIP, referenční firmware a úplná 4MB záloha původní desky jsou v lokální ignorované složce `work/baseline/`. Zachována je konfigurace displeje; DHT22, externí baterie a původní obrazovky byly nahrazeny.
 
@@ -96,6 +96,14 @@ Minutový interval: 34 560 B/den, přibližně 1,04 MB/30 dní plus režie. Nejs
 RTC čas pokračuje přes deep sleep, včetně předčasného probuzení tlačítkem. UTC se získá NTP nebo z prohlížeče. Po resetu/odpojení baterie vznikne nová relace. Záznamy bez UTC se zpětně nepřepisují; úplný CSV je zachová s prázdným UTC. Graf aktuální relace používá uplynulý čas; předchozí relace zařadí pouze se známým UTC. Výpadky a chyby senzoru vytvářejí mezery.
 
 Úložiště opravuje neúplný konec zápisu, přeskakuje chybné CRC a odmítne zapisovat za kompletní záznam neznámé verze. Po chybě zápisu zastaví logování do dalšího startu. Chybějící senzor neblokuje web a uloží se jako neplatné měření.
+
+### Diagnostika senzoru
+
+Od 0.2.1 ukazuje displej konkrétní chybu senzoru; `/api/status` obsahuje `sensor_error`, `sensor_address` a `sensor_chip_id`. Sériová linka 115200 vypisuje ACK, chyby Wire a identifikátor čipu (BME280 očekává 0x60). Timeout komunikace znovu vynutí inicializaci čidla.
+
+Před inicializací se krátce ověří, zda lze obě linky nezávisle ovládat přes open-drain. Pokud některou linku nelze stáhnout nebo zůstává nízká, firmware uvolní piny, zobrazí chybu a zastaví další I2C pokusy do resetu nebo výslovné diagnostiky. Po opravě zapojení resetuj desku.
+
+Po odeslání znaku `i` přes sériovou linku provede diagnostiku: kontrolu linek, softwarové čtení ID a hardwarový scan na 100/10 kHz, případně s prohozením SDA/SCL. Při elektrické chybě se test ihned zastaví; při opakovaných chybách řadiče se scan zkrátí. Na konci se obnoví standardní piny 21/22. Tato operace je určena pro samostatné připojené BME280 a nezapisuje do historie ani konfigurace; běžné měření poté pokračuje.
 
 ADC34 měří společnou napájecí větev. Na USB se proto napětí baterie nezobrazuje; procenta nabití se neodhadují. Pod 3,40 V (konzervativní práh, nutná kalibrace) se měření pozastaví a napájení kontroluje po 15 minutách. Toto omezení spotřeby nenahrazuje hardwarovou ochranu akumulátoru.
 
