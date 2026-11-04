@@ -33,6 +33,8 @@ Při testu mimo hardwarový I2C řadič: GPIO21 šel stáhnout do nuly, GPIO22 z
 
 FW 0.2.1 doplňuje diagnostiku a zastavení komunikace při chybě linek. Průběžný záznam diagnostiky je lokálně v `work/sensor-diagnostic-COM14.log`. Po opětovném připojení COM14 byla nahrána i finální ochrana: stejná chyba GPIO22 se potvrdila po výslovném uvolnění GPIO hold a firmware zastavil další komunikaci. Úložiště i konfigurace zůstaly funkční. Uživatel ověřil kontinuitu vodiče 22–SCL; kolísající odpor mezi 22 a 3V v zapojeném obvodu neurčuje příčinu. Dalším krokem je rozpojení vodiče SCL a opakování testu samotného GPIO22, aby se oddělila deska od modulu/propojení.
 
+Po odpájení spoje 22–SCL uživatelem proběhl nový test na COM14: samotný GPIO22 se úspěšně stáhne do nuly (`SCL driven LOW: 1/0`), stejně jako GPIO21 (`SDA driven LOW: 0/1`). Kontrola linek prošla opakovaně a I2C místo timeoutu vrací Wire=2 (NACK) na 0x76/0x77, což je při odpojeném SCL očekávané. Chyba je tím lokalizovaná na připojenou vnější část nebo původní pájený spoj; samotný výstup GPIO22 tímto testem funguje. Příčinu na modulu/vodiči/pájení zbývá zjistit.
+
 ## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.
