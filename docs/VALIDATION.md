@@ -35,6 +35,8 @@ FW 0.2.1 doplňuje diagnostiku a zastavení komunikace při chybě linek. Průb�
 
 Po odpájení spoje 22–SCL uživatelem proběhl nový test na COM14: samotný GPIO22 se úspěšně stáhne do nuly (`SCL driven LOW: 1/0`), stejně jako GPIO21 (`SDA driven LOW: 0/1`). Kontrola linek prošla opakovaně a I2C místo timeoutu vrací Wire=2 (NACK) na 0x76/0x77, což je při odpojeném SCL očekávané. Chyba je tím lokalizovaná na připojenou vnější část nebo původní pájený spoj; samotný výstup GPIO22 tímto testem funguje. Příčinu na modulu/vodiči/pájení zbývá zjistit.
 
+Po výměně uživatelem za jiný modul (pravděpodobně BMP180) byla na COM14 opakovaně přečtena adresa 0x77 a chip ID 0x55. Obě linky prošly kontrolou a I2C komunikace je funkční. ID odpovídá rodině BMP180/BMP085, nikoli BME280 (0x60); firmware proto správně odmítá načíst BME280 data a ponechává měření neplatné. Toto náhradní čidlo neměří vlhkost. Ověření skutečných hodnot BME280 a přesné příčiny závady původního modulu zbývá.
+
 ## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.
