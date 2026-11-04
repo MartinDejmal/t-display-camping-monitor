@@ -7,3 +7,8 @@
 
 # macOS
 .DS_Store
+
+# Local measurements and reference binaries
+work/
+.venv/
+__pycache__/

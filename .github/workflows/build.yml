@@ -1,0 +1,24 @@
+name: Firmware and host checks
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install platformio==6.2.0
+      - run: pio run -e ttgo-t-display -e ttgo-t-display-usb-sense -e ttgo-t-display-service
+      - run: python tools/check.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-bundles
+          include-hidden-files: true
+          path: |
+            .pio/build/ttgo-t-display*/firmware.bin
+            .pio/build/ttgo-t-display*/bootloader.bin
+            .pio/build/ttgo-t-display*/partitions.bin
