@@ -31,7 +31,7 @@ Modul uživatele: LaskaKit LA131017, výchozí adresa 0x77, vlastní pull-up rez
 
 Při testu mimo hardwarový I2C řadič: GPIO21 šel stáhnout do nuly, GPIO22 zůstal v jedničce i při příkazu stáhnout jej přes open-drain. Stejné chování GPIO22 potvrdila zkouška v obrácené roli SDA. Softwarové I2C neobdrželo ACK na 0x76 ani 0x77. To ukazuje na elektrický problém kolem pinu 22/SCL, například spoj s napájením nebo vadný vývod; přesnou příčinu je nutné ověřit měřením a izolováním vodiče. Zda jde o závadu modulu, pájení, vodiče nebo desky, zatím není potvrzeno.
 
-FW 0.2.1 doplňuje diagnostiku a zastavení komunikace při chybě linek. Průběžný záznam diagnostiky je lokálně v `work/sensor-diagnostic-COM14.log`. Zbývá kontrola zapojení uživatelem a ověření finální verze po opětovném připojení COM14.
+FW 0.2.1 doplňuje diagnostiku a zastavení komunikace při chybě linek. Průběžný záznam diagnostiky je lokálně v `work/sensor-diagnostic-COM14.log`. Po opětovném připojení COM14 byla nahrána i finální ochrana: stejná chyba GPIO22 se potvrdila po výslovném uvolnění GPIO hold a firmware zastavil další komunikaci. Úložiště i konfigurace zůstaly funkční. Uživatel ověřil kontinuitu vodiče 22–SCL; kolísající odpor mezi 22 a 3V v zapojeném obvodu neurčuje příčinu. Dalším krokem je rozpojení vodiče SCL a opakování testu samotného GPIO22, aby se oddělila deska od modulu/propojení.
 
 ## Před pájením: USB a servisní varianta — kontrolní body
 
