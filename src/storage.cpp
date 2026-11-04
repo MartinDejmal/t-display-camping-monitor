@@ -173,12 +173,17 @@ void Storage::history(const ClockState &clock, uint32_t seconds, HistoryBin *bin
         if (b.valid && b.session != r.session) b.gap = true;
         if (!b.valid) {
             b.minT = b.maxT = r.temperature;
-            b.minH = b.maxH = r.humidity;
             b.session = r.session;
             b.valid = true;
         } else {
             b.minT = std::min(b.minT, r.temperature);
             b.maxT = std::max(b.maxT, r.temperature);
+        }
+        if (!logger::hasHumidity(r)) b.humidityGap = true;
+        else if (!b.humidityValid) {
+            b.minH = b.maxH = r.humidity;
+            b.humidityValid = true;
+        } else {
             b.minH = std::min(b.minH, r.humidity);
             b.maxH = std::max(b.maxH, r.humidity);
         }

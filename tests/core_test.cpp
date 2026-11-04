@@ -25,7 +25,7 @@ int main() {
     }
     // An intact record for another schema must also be rejected.
     Record other = r;
-    other.flags = 0x2003;
+    other.flags = 0x3003;
     other.crc = crc16(reinterpret_cast<uint8_t *>(&other), offsetof(Record, crc));
     assert(!valid(other));
     assert(r.temperature == -1234 && sizeof(r) == 24);
@@ -46,7 +46,34 @@ int main() {
     r.flags &= ~FLAG_UTC;
     assert(!ageSeconds(r, 43, 60, 1800000120, age));
     assert(!ageSeconds(r, 42, 3599, 0, age));
-    const char *marker = "|TDLOGGER:ORIGINAL:USB=1:BENCH=0:RECORD=1:PART=1|";
+    assert(sensorTypeFromId(0x60) == SensorType::Bme280);
+    assert(sensorTypeFromId(0x55) == SensorType::Bmp085180);
+    assert(sensorTypeFromId(0x58) == SensorType::None);
+    char csv[160];
+    Record legacy = r;
+    legacy.flags = LEGACY_RECORD_VERSION | FLAG_SENSOR_OK | FLAG_UTC;
+    legacy.humidity = 0; // real 0% in legacy BME history must remain valid
+    legacy.crc = crc16(reinterpret_cast<uint8_t *>(&legacy), offsetof(Record, crc));
+    assert(valid(legacy) && hasHumidity(legacy));
+    assert(recordSensorType(legacy) == SensorType::Bme280);
+    formatCsvRow(legacy, csv, sizeof(csv));
+    assert(std::string(csv) == "42,3600,1800000000,-12.34,0.00,100100,1,1,BME280\r\n");
+    Record bmp = legacy;
+    bmp.flags = FLAG_SENSOR_OK | FLAG_UTC | typeFlags(SensorType::Bmp085180);
+    bmp.humidity = HUMIDITY_UNAVAILABLE;
+    seal(bmp);
+    assert(valid(bmp) && !hasHumidity(bmp));
+    assert(recordSensorType(bmp) == SensorType::Bmp085180);
+    formatCsvRow(bmp, csv, sizeof(csv));
+    assert(std::string(csv) == "42,3600,1800000000,-12.34,,100100,1,0,BMP085/180\r\n");
+    bmp.flags &= ~FLAG_SENSOR_OK;
+    formatCsvRow(bmp, csv, sizeof(csv));
+    assert(std::string(csv) == "42,3600,1800000000,,,,0,0,BMP085/180\r\n");
+    Record bme = legacy;
+    bme.flags = FLAG_SENSOR_OK | FLAG_HUMIDITY | typeFlags(SensorType::Bme280);
+    seal(bme);
+    assert(valid(bme) && hasHumidity(bme));
+    const char *marker = "|TDLOGGER:ORIGINAL:USB=1:BENCH=0:RECORD=2:PART=1|";
     std::string payload = std::string("garbage|TDLOGGx") + marker + "trailer";
     for (size_t chunk = 1; chunk <= payload.size(); ++chunk) {
         size_t matched=0; bool found=false;
@@ -56,7 +83,7 @@ int main() {
         assert(found);
     }
     size_t matched=0; bool found=false;
-    std::string wrong = "|TDLOGGER:ORIGINAL:USB=0:BENCH=1:RECORD=1:PART=1|";
+    std::string wrong = "|TDLOGGER:ORIGINAL:USB=0:BENCH=1:RECORD=2:PART=1|";
     feedOtaMarker(reinterpret_cast<const uint8_t*>(wrong.data()),wrong.size(),marker,matched,found);
     assert(!found);
     std::cout << "Core: CRC, schema, deadlines, early wake, time gaps, OTA marker/chunk boundaries OK\n";

@@ -63,7 +63,7 @@ void render() {
     }
 }
 void sampleDue() {
-    if (service.updating()) return;
+    if (service.updating() || ota.trial()) return; // no v2 writes until OTA health is confirmed
     if (settings.intervalS != appliedInterval) {
         appliedInterval = settings.intervalS;
         clockState.setDeadline(clockState.nowUs() + static_cast<uint64_t>(appliedInterval) * 1000000ULL);
@@ -78,17 +78,24 @@ void sampleDue() {
         r.session = clockState.session();
         r.elapsedS = clockState.elapsedS();
         r.epoch = clockState.epoch();
+        r.flags = logger::typeFlags(reading.type);
+        r.humidity = logger::HUMIDITY_UNAVAILABLE;
         if (r.epoch) r.flags |= logger::FLAG_UTC;
         if (reading.valid) {
             r.flags |= logger::FLAG_SENSOR_OK;
             r.temperature = lroundf(reading.temperature * 100);
-            r.humidity = lroundf(reading.humidity * 100);
+            if (reading.humidityAvailable) {
+                r.flags |= logger::FLAG_HUMIDITY;
+                r.humidity = lroundf(reading.humidity * 100);
+            }
             r.pressure = lroundf(reading.pressure);
         }
         const bool saved = storage.append(r);
-        Serial.printf("sample session=%lu elapsed=%lu sensor=%s log=%s\n",
+        Serial.printf("sample session=%lu elapsed=%lu sensor=%s log=%s type=%s T=%.2f C P=%.1f Pa RH=%s\n",
             static_cast<unsigned long>(r.session), static_cast<unsigned long>(r.elapsedS),
-            reading.valid ? "ok" : "missing", saved ? "ok" : "error");
+            reading.valid ? "ok" : "missing", saved ? "ok" : "error", sensorTypeName(reading.type),
+            reading.temperature, reading.pressure,
+            reading.valid && reading.humidityAvailable ? String(reading.humidity, 2).c_str() : "NA");
     } else reading.valid = false;
     const uint32_t interval = lowBattery ? LOW_BATTERY_RECHECK_S : settings.intervalS;
     const uint64_t previous = clockState.deadline() ? clockState.deadline() : now;
@@ -163,10 +170,20 @@ void setup() {
         USB_SENSE_WIRED, FORCE_SERVICE_MODE, storage.ready() ? "ok" : storage.error().c_str(), settingsOK ? "ok" : "error");
 }
 void loop() {
-    if (Serial.available() && Serial.read() == 'i' && !service.updating() && !ota.trial()) {
-        sensor.diagnose();
-        reading = sensor.measure();
-        render();
+    if (Serial.available() && !service.updating() && !ota.trial()) {
+        const char command = Serial.read();
+        if (command == 'i') {
+            sensor.diagnose();
+            reading = sensor.measure();
+            render();
+        } else if (command == 'v') {
+            logger::Record latest;
+            if (storage.latest(latest)) {
+                char row[160];
+                logger::formatCsvRow(latest, row, sizeof(row));
+                Serial.print(logger::CSV_HEADER); Serial.print(row);
+            } else Serial.println("No history record");
+        }
     }
     if (power.poll()) {
         if (power.external() && settingsOK) {

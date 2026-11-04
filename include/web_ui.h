@@ -16,7 +16,7 @@ button{cursor:pointer;background:#285c68}button:disabled{opacity:.5;cursor:wait}
 canvas{width:100%;height:270px}a{color:#82d8eb}#message{white-space:pre-wrap;color:#ffcf83;min-height:24px}
 small{color:#afc3cf}progress{width:100%;height:20px}h2{font-size:19px}code{color:#95e3d1}
 </style>
-<h1>T-Display</h1><p>Teplota a vlhkost v čase · servis zařízení</p>
+<h1>T-Display</h1><p>Teplota, tlak a dostupná vlhkost v čase · servis zařízení</p>
 <div id="message" role="status" aria-live="polite"></div>
 <section><div class="row">
 <div class="metric">Teplota<div class="value" id="temp">—</div></div>
@@ -51,9 +51,39 @@ async function api(path,data){const options={cache:'no-store'};if(data!==undefin
 function configObject(){return {interval_s:Number($('interval').value),screen_timeout_s:Number($('timeout').value),brightness:Number($('brightness').value),ssid:$('ssid').value}}
 function fillConfig(c){$('interval').value=c.interval_s;$('timeout').value=c.screen_timeout_s;$('brightness').value=c.brightness;$('ssid').value=c.ssid||''}
 function retention(){const n=Number($('interval').value)||60;const bytes=30*86400/n*24;$('retention').textContent='30 dní při tomto intervalu: přibližně '+Math.ceil(bytes/1024)+' KiB dat. Skutečnou délku omezuje volné místo a režie úložiště.'}
-async function status(first=false){state=await api('/api/status');token=state.csrf;$('temp').textContent=state.sensor_ok?state.temperature.toFixed(1)+' °C':'—';$('rh').textContent=state.sensor_ok?state.humidity.toFixed(1)+' %':'—';$('pressure').textContent=state.sensor_ok?state.pressure_hpa.toFixed(1)+' hPa':'—';$('status').textContent=state.network+' · '+(state.external?'externí napájení':'baterie')+' · historie '+Math.round(state.used_bytes/1024)+' / '+Math.round(state.total_bytes/1024)+' KiB'+(state.storage_error?' · '+state.storage_error:'');$('clock').textContent=state.epoch?'Čas UTC: '+new Date(state.epoch*1000).toISOString():'Kalendářní čas není nastaven. Relace '+state.session+', uplynulo '+state.elapsed_s+' s.';$('version').textContent='Firmware '+state.version+' · '+state.variant+' · návrat při selhání prvního startu: aplikační boot guard';if(first){fillConfig(state.config);retention()}}
+async function status(first=false){
+ state=await api('/api/status');token=state.csrf;
+ $('temp').textContent=state.sensor_ok?state.temperature.toFixed(1)+' °C':'—';
+ $('rh').textContent=state.sensor_ok&&state.has_humidity&&Number.isFinite(state.humidity)?state.humidity.toFixed(1)+' %':state.sensor_ok&&!state.has_humidity?'Neměří':'—';
+ $('pressure').textContent=state.sensor_ok?state.pressure_hpa.toFixed(1)+' hPa':'—';
+ $('status').textContent=(state.sensor_type||'Čidlo')+' · '+state.network+' · '+(state.external?'externí napájení':'baterie')+' · historie '+Math.round(state.used_bytes/1024)+' / '+Math.round(state.total_bytes/1024)+' KiB'+(state.storage_error?' · '+state.storage_error:'')+(state.sensor_error?' · '+state.sensor_error:'');
+ $('clock').textContent=state.epoch?'Čas UTC: '+new Date(state.epoch*1000).toISOString():'Kalendářní čas není nastaven. Relace '+state.session+', uplynulo '+state.elapsed_s+' s.';
+ $('version').textContent='Firmware '+state.version+' · '+state.variant+' · návrat při selhání prvního startu: aplikační boot guard';
+ if(first){fillConfig(state.config);retention()}
+}
 async function history(){historyData=(await api('/api/history?hours='+$('hours').value)).bins;draw()}
-function draw(){const c=$('chart'),dpr=window.devicePixelRatio||1,w=c.clientWidth,h=270;c.width=w*dpr;c.height=h*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);x.clearRect(0,0,w,h);x.font='12px system-ui';const left=48,right=w-12,width=right-left;for(let ch=0;ch<2;ch++){let low=Infinity,high=-Infinity;for(const b of historyData)if(b){low=Math.min(low,b[ch*2]);high=Math.max(high,b[ch*2+1])}const empty=!Number.isFinite(low);if(empty){low=0;high=1}if(high-low<1){low-=.5;high+=.5}const top=ch*130+22,bottom=top+76,color=ch?'#82d8eb':'#ffbd78';x.strokeStyle='#557080';x.beginPath();x.moveTo(left,top);x.lineTo(left,bottom);x.lineTo(right,bottom);x.stroke();x.fillStyle=color;x.fillText(ch?'Vlhkost % RH':'Teplota °C',left,top-7);x.fillText(high.toFixed(1),2,top+5);x.fillText(low.toFixed(1),2,bottom);let prev=null;historyData.forEach((b,i)=>{if(!b){prev=null;return}const px=left+i*width/Math.max(1,historyData.length-1),y1=bottom-(b[ch*2+1]-low)/(high-low)*76,y2=bottom-(b[ch*2]-low)/(high-low)*76,py=(y1+y2)/2;x.strokeStyle=color;x.beginPath();x.moveTo(px,y1);x.lineTo(px,y2+1);if(prev&&prev.session===b[4]){x.moveTo(prev.px,prev.py);x.lineTo(px,py)}x.stroke();prev={px,py,session:b[4]}});x.fillStyle='#afc3cf';x.fillText('-'+$('hours').value+' h',left,bottom+17);x.fillText('nyní',right-25,bottom+17);if(empty)x.fillText('Zatím nejsou dostupná data',left+20,top+45)}}
+function draw(){
+ const c=$('chart'),dpr=window.devicePixelRatio||1,w=c.clientWidth,h=270;c.width=w*dpr;c.height=h*dpr;
+ const x=c.getContext('2d');x.scale(dpr,dpr);x.clearRect(0,0,w,h);x.font='12px system-ui';
+ const left=48,right=w-12,width=right-left;
+ for(let ch=0;ch<2;ch++){
+  const available=b=>b&&Number.isFinite(b[ch*2])&&Number.isFinite(b[ch*2+1]);
+  let low=Infinity,high=-Infinity;
+  for(const b of historyData)if(available(b)){low=Math.min(low,b[ch*2]);high=Math.max(high,b[ch*2+1])}
+  const empty=!Number.isFinite(low);if(empty){low=0;high=1}if(high-low<1){low-=.5;high+=.5}
+  const top=ch*130+22,bottom=top+76,color=ch?'#82d8eb':'#ffbd78';x.strokeStyle='#557080';x.beginPath();x.moveTo(left,top);x.lineTo(left,bottom);x.lineTo(right,bottom);x.stroke();
+  x.fillStyle=color;x.fillText(ch?'Vlhkost % RH':'Teplota °C',left,top-7);
+  if(!empty){x.fillText(high.toFixed(1),2,top+5);x.fillText(low.toFixed(1),2,bottom)}
+  let prev=null;
+  historyData.forEach((b,i)=>{if(!available(b)){prev=null;return}
+   const px=left+i*width/Math.max(1,historyData.length-1),y1=bottom-(b[ch*2+1]-low)/(high-low)*76,y2=bottom-(b[ch*2]-low)/(high-low)*76,py=(y1+y2)/2;
+   x.strokeStyle=color;x.beginPath();x.moveTo(px,y1);x.lineTo(px,y2+1);
+   if(prev&&prev.session===b[4]){x.moveTo(prev.px,prev.py);x.lineTo(px,py)}x.stroke();prev={px,py,session:b[4]}
+  });
+  x.fillStyle='#afc3cf';x.fillText('-'+$('hours').value+' h',left,bottom+17);x.fillText('nyní',right-25,bottom+17);
+  if(empty)x.fillText(ch&&state&&!state.has_humidity?'Připojené čidlo vlhkost neměří':'Zatím nejsou dostupná data',left+20,top+45)
+ }
+}
 $('refresh').onclick=()=>history().catch(e=>say(e.message));$('hours').onchange=$('refresh').onclick;window.addEventListener('resize',draw);$('interval').oninput=retention;
 $('download').onclick=()=>{location.href='/api/export.csv?hours='+$('hours').value};
 $('config').onsubmit=async e=>{e.preventDefault();try{const c=configObject();if($('wifiPassword').value)c.wifi_password=$('wifiPassword').value;if($('adminPassword').value)c.admin_password=$('adminPassword').value;if($('clearWifi').checked)c.clear_wifi=true;await api('/api/config',c);say('Konfigurace uložena. Změnu sítě použije restart; nové heslo webu platí ihned.');$('wifiPassword').value='';$('adminPassword').value='';retention()}catch(e){say(e.message)}};

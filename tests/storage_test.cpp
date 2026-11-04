@@ -28,7 +28,7 @@ void fixture(const std::string &base,const char *name) {
 logger::Record record(uint32_t elapsed) {
     logger::Record r{};
     r.session=1; r.elapsedS=elapsed; r.temperature=-1250; r.humidity=5600;
-    r.pressure=100000; r.flags=logger::FLAG_SENSOR_OK;
+    r.pressure=100000; r.flags=logger::FLAG_SENSOR_OK | logger::FLAG_HUMIDITY | logger::TYPE_BME280;
     return r;
 }
 int main(int argc,char **argv) {
@@ -56,7 +56,7 @@ int main(int argc,char **argv) {
     Storage crcRepair; assert(crcRepair.begin() && crcRepair.used()==24);
     assert(crcRepair.append(record(240)));
     // A CRC-valid unknown schema is preserved and refuses further logging.
-    logger::Record future=record(300); future.flags=0x2001;
+    logger::Record future=record(300); future.flags=0x3001;
     future.crc=logger::crc16(reinterpret_cast<uint8_t*>(&future),offsetof(logger::Record,crc));
     {FILE *f=fopen((fakeRoot+"/b00000001.bin").c_str(),"ab");fwrite(&future,1,sizeof(future),f);fclose(f);}
     Storage incompatible; assert(!incompatible.begin());
@@ -84,5 +84,24 @@ int main(int argc,char **argv) {
     for(uint32_t i=0;i<1440;++i)assert(expiry.append(record(i*60)));
     assert(expiry.append(record(32UL*86400)));
     assert(expiry.used()==24);
+    // Read legacy history in place, then mix BME and BMP without inventing RH.
+    fixture(base,"mixed");
+    auto old=record(60); old.flags=logger::LEGACY_RECORD_VERSION | logger::FLAG_SENSOR_OK;
+    old.humidity=0;
+    old.crc=logger::crc16(reinterpret_cast<uint8_t*>(&old),offsetof(logger::Record,crc));
+    {FILE *f=fopen((fakeRoot+"/b00000001.bin").c_str(),"wb");fwrite(&old,1,sizeof(old),f);fclose(f);}
+    Storage mixed;assert(mixed.begin());
+    auto bmp=record(120); bmp.flags=logger::FLAG_SENSOR_OK | logger::TYPE_BMP085180;
+    bmp.humidity=logger::HUMIDITY_UNAVAILABLE;
+    assert(mixed.append(bmp));assert(mixed.append(record(180)));
+    testNow=240ULL*1000000;
+    HistoryBin separate[4]; mixed.history(clock,240,separate,4);
+    assert(separate[0].valid && separate[0].humidityValid && !separate[0].humidityGap && separate[0].minH==0);
+    assert(separate[1].valid && !separate[1].gap && !separate[1].humidityValid && separate[1].humidityGap);
+    assert(separate[2].valid && separate[2].humidityValid && !separate[2].humidityGap);
+    mixed.history(clock,240,bins,1);
+    assert(bins[0].valid && !bins[0].gap && bins[0].humidityGap);
+    Storage reopened;assert(reopened.begin());
+    assert(reopened.latest(last) && logger::hasHumidity(last));
     std::cout<<"Storage: erased provisioning, no format on corruption, torn writes, CRC recovery, schema protection, rotation, expiry, graph gaps OK\n";
 }

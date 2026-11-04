@@ -40,18 +40,20 @@ void Display::header(const char *title) {
 }
 void Display::values(const Reading &r, float battery, bool external, const Storage &storage) {
     if (!awake_) return;
-    header("Environment");
+    header(sensorTypeName(r.type));
     if (r.valid) {
         char value[32];
         snprintf(value, sizeof(value), "%.1f C", r.temperature);
         tft_.drawString(value, 7, 29, 4);
-        snprintf(value, sizeof(value), "%.1f %%", r.humidity);
-        tft_.drawString(value, 7, 63, 4);
+        if (r.humidityAvailable) {
+            snprintf(value, sizeof(value), "%.1f %%", r.humidity);
+            tft_.drawString(value, 7, 63, 4);
+        } else tft_.drawString("RH: n/a", 7, 67, 2);
         snprintf(value, sizeof(value), "%.1f hPa", r.pressure / 100);
         tft_.drawString(value, 137, 70, 2);
     } else {
         tft_.setTextColor(TFT_ORANGE, TFT_BLACK);
-        tft_.drawString("BME280 unavailable", 7, 42, 2);
+        tft_.drawString("Sensor unavailable", 7, 42, 2);
         tft_.drawString(r.error.isEmpty() ? "Check 3V / G / 21 / 22" : r.error, 7, 64, 2);
     }
     tft_.setTextColor(storage.ready() && storage.error().isEmpty() ? TFT_LIGHTGREY : TFT_RED, TFT_BLACK);
@@ -69,11 +71,12 @@ void Display::graph(Storage &storage, const ClockState &clock) {
     storage.history(clock, GRAPH_SECONDS, bins, N);
     for (int channel = 0; channel < 2; ++channel) {
         float low = 10000, high = -10000;
-        for (auto &b : bins) if (b.valid && !b.gap) {
+        for (auto &b : bins) if (b.valid && !b.gap && (!channel || (b.humidityValid && !b.humidityGap))) {
             low = std::min(low, (channel ? b.minH : b.minT) / 100.0f);
             high = std::max(high, (channel ? b.maxH : b.maxT) / 100.0f);
         }
-        if (high < low) { low = 0; high = 1; }
+        bool empty = high < low;
+        if (empty) { low = 0; high = 1; }
         if (high - low < 1) { low -= 0.5f; high += 0.5f; }
         const int top = channel ? 86 : 40, height = 25;
         const uint16_t color = channel ? TFT_CYAN : TFT_ORANGE;
@@ -82,11 +85,12 @@ void Display::graph(Storage &storage, const ClockState &clock) {
         snprintf(label, sizeof(label), "%s %.1f .. %.1f", channel ? "RH %" : "T C", low, high);
         tft_.drawString(label, 7, top - 13, 1);
         tft_.drawFastHLine(16, top + height, N, TFT_DARKGREY);
+        if (empty) tft_.drawString(channel ? "No humidity data" : "No temperature data", 20, top + 8, 1);
         int lastX = -1, lastY = 0;
         uint32_t lastSession = 0;
         for (size_t i = 0; i < N; ++i) {
             auto &b = bins[i];
-            if (!b.valid || b.gap) { lastX = -1; continue; }
+            if (!b.valid || b.gap || (channel && (!b.humidityValid || b.humidityGap))) { lastX = -1; continue; }
             float min = (channel ? b.minH : b.minT) / 100.0f;
             float max = (channel ? b.maxH : b.maxT) / 100.0f;
             int y1 = top + height - roundf((max - low) * height / (high - low));

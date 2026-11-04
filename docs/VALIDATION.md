@@ -37,6 +37,16 @@ Po odpájení spoje 22–SCL uživatelem proběhl nový test na COM14: samotný 
 
 Po výměně uživatelem za jiný modul (pravděpodobně BMP180) byla na COM14 opakovaně přečtena adresa 0x77 a chip ID 0x55. Obě linky prošly kontrolou a I2C komunikace je funkční. ID odpovídá rodině BMP180/BMP085, nikoli BME280 (0x60); firmware proto správně odmítá načíst BME280 data a ponechává měření neplatné. Toto náhradní čidlo neměří vlhkost. Ověření skutečných hodnot BME280 a přesné příčiny závady původního modulu zbývá.
 
+## Podpora BMP085/BMP180 ve 0.3.0 — 4. 11. 2026
+
+- Přidáno automatické rozpoznání BME280 (0x60) a BMP085/BMP180 (0x55); u BMP se měří T/P a vlhkost se označuje jako nedostupná.
+- Nový formát v2 má stále 24 B; čte se i v1. Host testy ověřily původní BME záznam s reálnými 0 % RH, nové BMP bez RH, smíšené grafové koše, opětovné otevření historie a přesné CSV řádky. Webový JS test ověřil `humidity=null`, zobrazení Neměří, zachování T/P a žádné nečíselné souřadnice grafu.
+- Všechny varianty se sestavily: baterie 1 032 688 B, servis 1 032 704 B, USB sense 1 032 800 B; vejdou se do OTA oddílů. Kompletní host kontroly prošly.
+- Servisní 0.3.0 nahrána na COM14 přes USB s kontrolou hashů. Historie zůstala připojená a konfigurace se načetla. Nedošlo k formátování úložiště.
+- Při skutečném 68s testu prošla identifikace čidla i dvě plánovaná měření: v čase 0 s T=23,50 °C, P=98 567 Pa; v čase 60 s T=23,90 °C, P=98 574 Pa. Obě měla `sensor=ok log=ok`, typ BMP085/180 a RH=NA.
+- Sériový příkaz `v` dvakrát přečetl poslední uložený záznam. CSV obsahovalo platné T/P, prázdné RH, sensor_ok=1, humidity_available=0 a sensor_type=BMP085/180. Kontrolní skript ověřil postupující čas a rozumné rozsahy hodnot.
+- Záznam skutečného testu je lokálně v `work/bmp-live-verification.log`. Kontrola webu se zatím opírá o hostitelský test JS/API; fyzický BME280 a celé OTA nadále zbývá ověřit.
+
 ## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.

@@ -113,6 +113,7 @@ void Sensor::begin() {
     if (lineFault_) return;
     Wire.end();
     address_ = 0;
+    type_ = SensorType::None;
     detectedAddress_ = chipId_ = 0;
     if (!checkLines(PIN_I2C_SDA, PIN_I2C_SCL, error_)) { lineFault_ = true; return; }
     if (!Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 100000)) { error_ = "I2C driver start failed"; return; }
@@ -130,16 +131,29 @@ void Sensor::begin() {
             Serial.printf("[BME] 0x%02X ACK, chip ID read failed\n", addr);
             continue;
         }
-        Serial.printf("[BME] 0x%02X ACK, chip ID=0x%02X (BME280 expects 0x60)\n", addr, chipId_);
-        if (chipId_ != 0x60) { error_ = "Unexpected sensor chip ID"; continue; }
-        if (bme_.begin(addr, &Wire)) {
+        type_ = sensorTypeFromId(chipId_);
+        Serial.printf("[sensor] 0x%02X ACK, chip ID=0x%02X type=%s\n", addr, chipId_, sensorTypeName(type_));
+        if (type_ == SensorType::None) { error_ = "Unsupported sensor chip ID"; continue; }
+        bool initialized = false;
+        if (type_ == SensorType::Bme280) initialized = bme_.begin(addr, &Wire);
+        else if (addr == BMP085_I2CADDR) {
+            // AC4/5/6 cannot be zero/erased: prevents division by zero on bad calibration reads.
+            bool calibrationOK = true;
+            for (uint8_t reg : {0xb0, 0xb2, 0xb4}) {
+                uint8_t high = 0, low = 0;
+                if (!readRegister(addr, reg, high) || !readRegister(addr, reg + 1, low) ||
+                    (high == 0 && low == 0) || (high == 0xff && low == 0xff)) calibrationOK = false;
+            }
+            if (calibrationOK) initialized = bmp_.begin(BMP085_ULTRALOWPOWER, &Wire);
+        }
+        if (initialized) {
             address_ = addr;
             error_ = "";
             break;
         }
-        error_ = "BME initialization failed";
+        error_ = "Sensor initialization failed";
     }
-    if (address_) bme_.setSampling(Adafruit_BME280::MODE_FORCED,
+    if (address_ && type_ == SensorType::Bme280) bme_.setSampling(Adafruit_BME280::MODE_FORCED,
         Adafruit_BME280::SAMPLING_X1, Adafruit_BME280::SAMPLING_X1,
         Adafruit_BME280::SAMPLING_X1, Adafruit_BME280::FILTER_OFF);
 }
@@ -148,27 +162,34 @@ Reading Sensor::measure() {
     Reading r;
     r.address = detectedAddress_;
     r.chipId = chipId_;
+    r.type = type_;
+    r.humidityAvailable = type_ == SensorType::Bme280;
     r.error = error_;
     if (!address_) return r;
     uint8_t id = 0;
-    if (!readRegister(address_, 0xd0, id) || id != 0x60) {
+    if (!readRegister(address_, 0xd0, id) || id != chipId_) {
         address_ = 0;
         r.error = "Sensor disconnected";
         return r;
     }
-    if (!bme_.takeForcedMeasurement()) {
-        address_ = 0;
-        r.error = "Measurement timed out";
-        return r;
+    if (type_ == SensorType::Bme280) {
+        if (!bme_.takeForcedMeasurement()) {
+            address_ = 0;
+            r.error = "Measurement timed out";
+            return r;
+        }
+        delay(12);
+        r.temperature = bme_.readTemperature();
+        r.humidity = bme_.readHumidity();
+        r.pressure = bme_.readPressure();
+    } else {
+        r.temperature = bmp_.readTemperature();
+        r.pressure = bmp_.readPressure();
     }
-    // x1 T/P/RH conversion takes < 12 ms; also covers the status-bit start delay.
-    delay(12);
-    r.temperature = bme_.readTemperature();
-    r.humidity = bme_.readHumidity();
-    r.pressure = bme_.readPressure();
-    r.valid = isfinite(r.temperature) && isfinite(r.humidity) && isfinite(r.pressure) &&
+    r.valid = isfinite(r.temperature) && isfinite(r.pressure) &&
         r.temperature >= -40 && r.temperature <= 85 &&
-        r.humidity >= 0 && r.humidity <= 100 && r.pressure >= 30000 && r.pressure <= 110000;
+        (!r.humidityAvailable || (isfinite(r.humidity) && r.humidity >= 0 && r.humidity <= 100)) &&
+        r.pressure >= 30000 && r.pressure <= 110000;
     if (!r.valid) {
         Serial.printf("[BME] invalid T=%f RH=%f P=%f\n", r.temperature, r.humidity, r.pressure);
         address_ = 0;
@@ -179,6 +200,7 @@ Reading Sensor::measure() {
 void Sensor::diagnose() {
     Serial.println("[I2C] diagnostic: configured pins, then reversed data wires; no filesystem changes");
     lineFault_ = false;
+    type_ = SensorType::None;
     address_ = detectedAddress_ = chipId_ = 0;
     for (int swap = 0; swap < 2; ++swap) {
         Wire.end();

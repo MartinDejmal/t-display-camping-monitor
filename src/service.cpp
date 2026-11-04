@@ -120,9 +120,12 @@ void Service::status() {
     doc["sensor_error"] = reading_.error;
     doc["sensor_address"] = reading_.address;
     doc["sensor_chip_id"] = reading_.chipId;
+    doc["sensor_type"] = sensorTypeName(reading_.type);
+    doc["has_humidity"] = reading_.humidityAvailable;
+    doc["humidity"] = nullptr;
     if (reading_.valid) {
         doc["temperature"] = reading_.temperature;
-        doc["humidity"] = reading_.humidity;
+        if (reading_.humidityAvailable) doc["humidity"] = reading_.humidity;
         doc["pressure_hpa"] = reading_.pressure / 100;
     }
     doc["session"] = clock_.session();
@@ -156,8 +159,9 @@ void Service::history() {
         else {
             chunk += '['; chunk += String(b.minT / 100.0f, 2); chunk += ',';
             chunk += String(b.maxT / 100.0f, 2); chunk += ',';
-            chunk += String(b.minH / 100.0f, 2); chunk += ',';
-            chunk += String(b.maxH / 100.0f, 2); chunk += ',';
+            bool humidity = b.humidityValid && !b.humidityGap;
+            chunk += humidity ? String(b.minH / 100.0f, 2) : String("null"); chunk += ',';
+            chunk += humidity ? String(b.maxH / 100.0f, 2) : String("null"); chunk += ',';
             chunk += String(b.session); chunk += ']';
         }
         if (chunk.length() > 1024) { server_.sendContent(chunk); chunk = ""; if (tick_) tick_(); }
@@ -173,7 +177,7 @@ void Service::csv() {
     server_.sendHeader("Content-Disposition", "attachment; filename=tdisplay-history.csv");
     server_.setContentLength(CONTENT_LENGTH_UNKNOWN);
     server_.send(200, "text/csv; charset=utf-8", "");
-    server_.sendContent("session,elapsed_s,utc_epoch,temperature_c,humidity_pct,pressure_pa,sensor_ok\r\n");
+    server_.sendContent(logger::CSV_HEADER);
     String chunk;
     uint32_t visited = 0, started = millis();
     bool complete = true;
@@ -182,12 +186,9 @@ void Service::csv() {
         if (!server_.client().connected() || millis() - started > 60000) { complete = false; return false; }
         uint32_t age;
         if (hours && (!logger::ageSeconds(r, session, elapsed, epoch, age) || age >= hours * 3600UL)) return true;
-        chunk += String(r.session) + ',' + String(r.elapsedS) + ',';
-        if (r.flags & logger::FLAG_UTC) chunk += String(r.epoch);
-        chunk += ',';
-        if (r.flags & logger::FLAG_SENSOR_OK) {
-            chunk += String(r.temperature / 100.0f, 2) + ',' + String(r.humidity / 100.0f, 2) + ',' + String(r.pressure) + ",1\r\n";
-        } else chunk += ",,,0\r\n";
+        char row[160];
+        logger::formatCsvRow(r, row, sizeof(row));
+        chunk += row;
         if (chunk.length() >= 1024) { server_.sendContent(chunk); chunk = ""; }
         return true;
     });

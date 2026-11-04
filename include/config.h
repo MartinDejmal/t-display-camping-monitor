@@ -13,7 +13,7 @@
 #define LOGGER_STRINGIFY(x) LOGGER_STRINGIFY_INNER(x)
 // Compatibility marker, not a cryptographic signature. Used by web OTA preflight.
 constexpr char FIRMWARE_FAMILY[] = "|TDLOGGER:ORIGINAL:USB=" LOGGER_STRINGIFY(USB_SENSE_WIRED)
-    ":BENCH=" LOGGER_STRINGIFY(FORCE_SERVICE_MODE) ":RECORD=1:PART=1|";
+    ":BENCH=" LOGGER_STRINGIFY(FORCE_SERVICE_MODE) ":RECORD=2:PART=1|";
 constexpr uint32_t DEFAULT_INTERVAL_S = 60;
 constexpr uint32_t HISTORY_SECONDS = 30UL * 86400;
 constexpr uint32_t GRAPH_SECONDS = 8UL * 3600;

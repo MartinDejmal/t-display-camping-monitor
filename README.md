@@ -1,12 +1,12 @@
 # T-Display environmental logger
 
-Firmware pro **původní TTGO T-Display, ESP32, ST7789 240 × 135** a jeden BME280. Není určen pro T-Display-S3.
+Firmware pro **původní TTGO T-Display, ESP32, ST7789 240 × 135** a jedno čidlo BME280 nebo BMP085/BMP180. Typ se rozpozná automaticky podle ID. Není určen pro T-Display-S3.
 
 Měří standardně jednou za minutu, ukládá historii do interní flash a mezi měřeními používá deep sleep. Displej se při časovaném probuzení neinicializuje. Při externím napájení lze zpřístupnit web, CSV, konfiguraci a OTA.
 
 ## Stav
 
-Implementace 0.2.1: všechny tři varianty se sestavují, hostitelské testy ověřují formát, časování, úložiště a akce webu. **Fyzické zapojení, odběry, OTA na desce a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
+Implementace 0.3.0: všechny tři varianty se sestavují, hostitelské testy ověřují formát, časování, úložiště a akce webu. Na COM14 byla ověřena identifikace BMP085/BMP180, dvě minutová měření a čtení uloženého CSV s chybějící vlhkostí. **Funkční BME280, odběry, kompletní OTA na desce a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
 
 Nová implementace je ve větvi `main`. Původní funkční příklad zachovává lokální tag `baseline-working-20261104`; zdrojový ZIP, referenční firmware a úplná 4MB záloha původní desky jsou v lokální ignorované složce `work/baseline/`. Zachována je konfigurace displeje; DHT22, externí baterie a původní obrazovky byly nahrazeny.
 
@@ -22,6 +22,17 @@ Displej k sobě, USB dole. Použité popisky přímo na desce:
 | `22` | SCL / SCK |
 
 Šestipinový modul: CS / CSB na `3V`, SDO na `G` (adresa 0x76). Firmware zkouší i 0x77 a kontroluje BME280; BMP280 neumí vlhkost. Modul s LED nebo neúsporným regulátorem může zhoršit výdrž. Čidlo umísti mimo teplo desky a nabíjení.
+
+### Podporovaná čidla
+
+| Čidlo | ID / adresa | Měření |
+|---|---|---|
+| BME280 | ID 0x60, 0x76 nebo 0x77 | Teplota, tlak a vlhkost; forced mode x1 |
+| BMP085/BMP180 | ID 0x55, 0x77 | Teplota a tlak; ultra low power, bez vlhkosti |
+
+BMP085 a BMP180 nelze tímto společným ID rozlišit, proto je označení `BMP085/180`. Zapojení používá stejné 3V/G/21/22. Čidlo se nevybírá ručně. BMP280 s ID 0x58 zatím podporovaný není.
+
+U BMP je vlhkost na displeji `RH: n/a`, na webu `Neměří` a v JSON `null` při `has_humidity=false`. Platné teploty a tlaky se normálně ukládají. V grafu zůstává teplota; vlhkost má mezeru, případně zprávu bez dat. Historické BME hodnoty vlhkosti zůstávají dostupné. CSV nechává pole vlhkosti prázdné a přidává `humidity_available` a `sensor_type`.
 
 Volitelná detekce externího napájení:
 
@@ -61,6 +72,8 @@ pio run -e ttgo-t-display-usb-sense -t upload
 
 První nahrání nové verze musí proběhnout **přes USB**, protože zavádí novou tabulku oddílů a bootloader. OTA mění pouze aplikaci. Přechod mezi variantami zapojení proveď také přes USB; web OTA odmítne jinou variantu.
 
+**Přechod z 0.2.x na 0.3.0 také proveď přes USB.** Nové záznamy používají schéma v2 a značku kompatibility `RECORD=2`; starý OTA server správně tento obraz odmítne. Velikost záznamu i tabulka oddílů zůstávají stejné, uložená historie a konfigurace se nemažou. Firmware 0.3.0 čte v1 i v2. Downgrade na 0.2.x neumí v2 číst a starý firmware odmítne za takovou historií zapisovat. Při zkušebním startu OTA se nové záznamy zapisují až po potvrzení zdravého startu, aby předchozí verze mohla provést časný rollback.
+
 Historie má 1216 KiB; oba OTA oddíly mají po 1408 KiB. LittleFS se automaticky inicializuje pouze tehdy, když je celý jeho oddíl prázdný (0xFF). Při poškození nebo nekompatibilních starších datech se **neformátuje**. Chyba je vidět jako `Log ERROR` a na webu. Před případnou ruční obnovou zálohuj flash.
 
 Nepoužívej `uploadfs` pro běžnou aktualizaci: souborový oddíl obsahuje historii. Web je zabudovaný ve firmwaru.
@@ -89,7 +102,7 @@ Použita je HTTP Basic autentizace a náhodný CSRF token pro změny. POST vyža
 
 ## Historie, čas a baterie
 
-Záznam má 24 B, formát v1 a CRC16-CCITT. Obsahuje relaci, uplynulé sekundy, volitelné UTC, teplotu po 0,01 °C, vlhkost po 0,01 % RH, tlak v Pa a příznaky. Rozlišení záznamu není přesností senzoru.
+Záznam má 24 B, formát v2 a CRC16-CCITT; čtení zůstává kompatibilní s v1. Obsahuje relaci, uplynulé sekundy, volitelné UTC, teplotu po 0,01 °C, vlhkost po 0,01 % RH, tlak v Pa a příznaky typu čidla a dostupnosti vlhkosti. Bez vlhkosti je uloženo 0xFFFF a její příznak není nastavený. U v1 platné měření znamená BME280 s vlhkostí, včetně skutečných 0 %. Rozlišení záznamu není přesností senzoru.
 
 Minutový interval: 34 560 B/den, přibližně 1,04 MB/30 dní plus režie. Nejstarší bloky se odstraňují podle času nebo při zaplnění 90 % kapacity. Retence je přibližná, po blocích až 1440 záznamů; může být o blok delší nebo zkrácená režií. U starých relací bez UTC rozhoduje kapacita, protože skutečné stáří neznáme.
 
@@ -104,6 +117,8 @@ Od 0.2.1 ukazuje displej konkrétní chybu senzoru; `/api/status` obsahuje `sens
 Před inicializací se krátce ověří, zda lze obě linky nezávisle ovládat přes open-drain. Pokud některou linku nelze stáhnout nebo zůstává nízká, firmware uvolní piny, zobrazí chybu a zastaví další I2C pokusy do resetu nebo výslovné diagnostiky. Po opravě zapojení resetuj desku.
 
 Po odeslání znaku `i` přes sériovou linku provede diagnostiku: kontrolu linek, softwarové čtení ID a hardwarový scan na 100/10 kHz, případně s prohozením SDA/SCL. Při elektrické chybě se test ihned zastaví; při opakovaných chybách řadiče se scan zkrátí. Na konci se obnoví standardní piny 21/22. Tato operace je určena pro samostatné připojené BME280 a nezapisuje do historie ani konfigurace; běžné měření poté pokračuje.
+
+Znak `v` vypíše poslední uložený záznam jako CSV včetně dostupnosti vlhkosti a typu čidla. Diagnostiku lze používat i s BMP085/BMP180.
 
 ADC34 měří společnou napájecí větev. Na USB se proto napětí baterie nezobrazuje; procenta nabití se neodhadují. Pod 3,40 V (konzervativní práh, nutná kalibrace) se měření pozastaví a napájení kontroluje po 15 minutách. Toto omezení spotřeby nenahrazuje hardwarovou ochranu akumulátoru.
 

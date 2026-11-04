@@ -8,6 +8,7 @@
 struct HistoryBin {
     bool valid = false;
     bool gap = false;
+    bool humidityValid = false, humidityGap = false;
     int16_t minT = 0, maxT = 0;
     uint16_t minH = 0, maxH = 0;
     uint32_t session = 0;
