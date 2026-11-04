@@ -59,6 +59,20 @@ Po výměně uživatelem za jiný modul (pravděpodobně BMP180) byla na COM14 o
 - Po vypnutí uspávání Wi-Fi: 8/8 pingů, 6–58 ms; celý skutečný HTTP test prošel (status, relace, tlakové koše, výběr předchozí relace, stránky a prostředky) s odpověďmi 0,06–0,23 s. Změna zlepšila aktuálně pozorované spojení; dlouhodobou stabilitu je nutné sledovat.
 - Záznamy kontrol jsou lokálně v `work/tabs-http-verification.log`, `work/tabs-checks.log`, `work/tabs-build.log`, `work/tabs-upload.log` a `work/tabs-live-verification.log`. Kompletní OTA/rollback, spotřeba a bateriová výdrž stále nejsou ověřené.
 
+## Stabilita HTTP, OTA a deep sleep ve 0.4.1 — 5. 11. 2026
+
+- Původní multipart příjem potřeboval na 1MB obraz asi 72 s a čekání na nečinného připojeného klienta nemělo konečný limit. Nový parser nad původním routováním streamuje bloky, omezuje délky/čas, odmítá raw JSON na OTA endpointu a přeruší neúplný soubor. Sdílený framework se neupravuje.
+- Native test skutečného `bounded_webserver.cpp`: binární data včetně NUL a podobnosti s hranicí, bloky, nedokončené hlavičky/tělo, nečinný/trickle klient, přetečení millis, duplicitní/nadměrné délky, textový multipart, chybný konec a zotavení; zablokovaný i pomalu čtoucí příjemce a 200 náhodných chybných požadavků.
+- Všechny host kontroly prošly. Obrazy baterie a servis: 1 068 160 B, USB sense: 1 068 272 B / slot 1 441 792 B; statická RAM 65 928 B. Všechny varianty se sestavují.
+- Na desce odmítnuty neplatné konfigurace, POST bez CSRF, jiná varianta i neplatný ESP obraz. Přerušený multipart ponechal původní aplikaci v běhu. Připojeného klienta, který po 16 KiB přestal posílat, server odpojil za 10,28 s; relace, konfigurace a historie zůstaly funkční.
+- Skutečný rollback: izolovaný obraz v ignorované `work/ota-rollback-fixture/` po vstupu do guardu úmyslně resetoval před potvrzením. Následoval návrat na 0.4.1 s dostupnou historií a konfigurací. Testovací obraz není součástí finálního aktivního firmwaru ani publikovaných zdrojů.
+- Běžná OTA potvrdila start a obnovila zápisy. Finální servisní aplikace po doplnění omezených socketových zápisů: 1 068 160 B za 8,55 s, nová relace 40 s čerstvým uloženým BMP vzorkem; konfigurace a historie se zachovaly.
+- Finální HTTP test: chybné/neúplné hlavičky, JSON, velikosti, duplicitní délka, raw OTA a textový multipart se ukončí a server dále odpovídá ve stejné relaci. Prošlo 60 GETů se třemi klienty (maximum 0,438 s) a odpojení během CSV. Nečtoucí klient s malým receive bufferem nezablokoval další požadavek déle než 1,50 s. Min. rezerva stacku 4636 B, kolem 203 KiB volné RAM v krátkém testu.
+- V reálném prohlížeči ověřena stránka Zařízení a tlakový graf z desky včetně relací, vedle předchozího lokálního náhledu.
+- Skutečný deep sleep: na USB dočasně nahrána běžná bateriová varianta bez Wi-Fi (nejde o měření odběru). Relace 38 má tři platné BMP záznamy v časech 0, 60 a 120 s a dva `DEEPSLEEP_RESET`. Po obnovení servisu CSV potvrdilo všechny tři vzorky s prázdným UTC a chybějící RH. Správné datum nebylo potřeba.
+- Lokální důkazy: `work/bounded-checks.log`, `work/bounded-build.log`, `work/ota-live-04.log`, `work/ota-live-04-serial.log`, `work/idle-ota-041.log`, `work/http-stress-final-041.log`, `work/final-041.log`, `work/sleep-041-summary.json`, `work/sleep-041-serial.log`, `work/ota-final-release-041.log`. Před OTA uložena další lokální 4MiB záloha `work/before-ota-04-COM14.bin`; není publikována.
+- Krátký běh monitoru: 35 s, 5 požadavků, bez chyb, jeden nový vzorek a stabilní RAM. Dlouhodobý noční test bude vyhodnocen samostatně. Tyto kontroly neověřují bateriovou výdrž, VBUS dělič, odpojení USB během OTA ani selhání před spuštěním aplikačního guardu.
+
 ## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.
@@ -93,11 +107,11 @@ Po výměně uživatelem za jiný modul (pravděpodobně BMP180) byla na COM14 o
 
 ## OTA
 
-- [ ] Nová verze stejné varianty zachová data a konfiguraci.
+- [x] Nová verze stejné varianty zachová data a konfiguraci.
 - [ ] Jiná varianta, poškozený nebo neplatný obraz se odmítnou.
-- [ ] Přerušený přenos ponechá funkční původní aplikaci.
+- [x] Přerušený přenos ponechá funkční původní aplikaci.
 - [ ] Odpojení USB: dostatečná baterie dokončí přenos, nízká jej přeruší.
-- [ ] Záměrné selhání po startu guardu před potvrzením: watchdog a návrat.
+- [x] Záměrný reset po startu guardu před potvrzením: návrat. Vypršení watchdogu ještě zvlášť neověřeno.
 - [ ] Chybějící senzor rollback nezpůsobí, nečitelná konfigurace/úložiště ano.
 
 ## Spotřeba a výdrž

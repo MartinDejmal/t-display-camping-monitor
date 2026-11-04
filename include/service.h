@@ -1,5 +1,5 @@
 #pragma once
-#include <WebServer.h>
+#include "bounded_webserver.h"
 #include <functional>
 #include "config.h"
 #include "clock_state.h"
@@ -27,7 +27,7 @@ private:
     Power &power_;
     OtaGuard &ota_;
     Reading &reading_;
-    WebServer server_{80};
+    BoundedWebServer server_{80};
     bool running_ = false, ap_ = false, connected_ = false, routes_ = false;
     bool ntpStarted_ = false;
     bool uploading_ = false, uploadAuthorized_ = false, uploadOK_ = false;

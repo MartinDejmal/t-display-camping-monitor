@@ -67,7 +67,9 @@ void Display::graph(Storage &storage, const ClockState &clock, bool pressure) {
     if (!awake_) return;
     header("Last 8 hours");
     constexpr size_t N = 208;
-    HistoryBin bins[N];
+    // The Arduino loop stack is only 8 KiB. This single-threaded view can reuse
+    // static bins rather than placing ~5 KiB beside filesystem/library frames.
+    static HistoryBin bins[N];
     storage.history(clock, GRAPH_SECONDS, bins, N);
     for (int channel = 0; channel < 2; ++channel) {
         float low = 10000, high = -10000;

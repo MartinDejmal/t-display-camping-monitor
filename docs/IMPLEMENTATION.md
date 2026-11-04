@@ -13,7 +13,7 @@
 | 9. Web | Šest samostatných stránek, historie relací, stav, CSV, konfigurace, čas, volitelné přihlášení | Reálný prohlížeč a souběh exportu |
 | 10. OTA a výdrž | Dual slot, aplikační guard, CI a host testy | Skutečné OTA/rollback, spotřeba a 72 h |
 
-Aktuální servisní varianta 0.4.0 je nahraná na COM14. BMP085/180 měří a ukládá; konfigurace a historie se načetly. Dva vzorky po 60 s potvrdily zachování plánu i při přechodu z neznámého UTC na čas ze sítě. Podrobnosti jsou v VALIDATION.md. Aplikační guard má omezení popsaná v README.
+Aktuální servisní varianta 0.4.1 je nahraná na COM14. BMP085/180 měří a ukládá; konfigurace a historie se načetly. Ověřeny změna UTC bez posunu měření, skutečný deep sleep a úspěšná/přerušená OTA včetně návratu po nepotvrzeném startu. Podrobnosti jsou v VALIDATION.md. Aplikační guard má omezení popsaná v README.
 
 ## Moduly
 
@@ -25,6 +25,7 @@ Aktuální servisní varianta 0.4.0 je nahraná na COM14. BMP085/180 měří a u
 - `power.*`: VBUS a měření společné napájecí větve.
 - `display.*`: ST7789, hodnoty, graf a servisní informace.
 - `settings.*`: konfigurace v jednom NVS blobu.
+- `bounded_webserver.*`: omezený GET/JSON parser a blokový příjem jediného multipart firmwaru; délkové/časové limity a omezené socketové zápisy. Používá routování, Basic a odpovědi připnutého Arduino WebServeru bez jeho úpravy.
 - `service.*`, `web_ui.h`: Wi-Fi, HTTP API a web bez internetových závislostí.
 - `ota_guard.*`, `ota_marker.h`: zkušební boot a kontrola kompatibility.
 
@@ -49,3 +50,7 @@ Při `auth_enabled=true` všechny endpointy vyžadují Basic přihlášení `adm
 CSV export pravidelně obsluhuje plán měření a přenáší malé chunky. Při odpojení nebo 60s limitu spojení ukončí bez závěrečného chunku, aby klient poznal neúplný přenos. Server je synchronní; velmi pomalý klient přesto může plán zpozdit o čekání na síťový zápis. Zmeškané termíny se nedoplňují falešnými vzorky.
 
 V 0.3.0 přidává CSV poslední dvě pole `humidity_available` (platná hodnota v tomto záznamu) a `sensor_type`. V2 flagy: SENSOR_OK=1, UTC=2, HUMIDITY=4, BME280=0x10, BMP085/180=0x20. Verze v horních čtyřech bitech je 0x2000; v1=0x1000 je nadále čitelná. Rozdělení flash se nemění. Během nepotvrzeného OTA startu se do historie nezapisuje.
+
+Ve 0.4.1 `/api/status` navíc obsahuje `uptime_s`, `free_heap_bytes`, `min_free_heap_bytes`, `largest_free_block_bytes`, `loop_stack_free_min_bytes` a `reset_reason` (ESP-IDF). Pole slouží dlouhodobému sledování přes `tools/soak.py`. Grafové koše displeje jsou statické, aby přibližně 5 KiB nespotřebovávaly 8KiB zásobník hlavní smyčky. Formát záznamů a nastavení zůstává kompatibilní.
+
+Běžný HTTP požadavek má limit 3 s, jednotlivý socketový zápis 1,5 s. Při OTA se měření záměrně pozastaví; při 10 s bez příchozích dat nebo celkem 180 s se přenos přeruší a původní aplikace pokračuje.

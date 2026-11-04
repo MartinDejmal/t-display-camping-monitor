@@ -68,6 +68,12 @@ def main():
                     "-I", str(ROOT / "include"), str(ROOT / "tests/clock_test.cpp"),
                     str(ROOT / "src/clock_state.cpp"), "-o", str(clock_exe)], check=True, env=compiler_env)
     subprocess.run([str(clock_exe)], check=True, env=compiler_env)
+    http_exe = work / ("http-test.exe" if sys.platform == "win32" else "http-test")
+    subprocess.run([args.cxx, "-std=c++11", "-Wall", "-Wextra", "-static",
+                    "-I", str(ROOT / "tests/http_fakes"), "-I", str(ROOT / "include"),
+                    str(ROOT / "tests/http_test.cpp"), str(ROOT / "src/bounded_webserver.cpp"),
+                    "-o", str(http_exe)], check=True, env=compiler_env)
+    subprocess.run([str(http_exe)], check=True, env=compiler_env)
     ui = (ROOT / "include/web_ui.h").read_text(encoding="utf-8")
     source = re.search(r'const char WEB_JS\[\] PROGMEM = R"JS\((.*?)\)JS";', ui, re.S).group(1)
     (work / "ui.js").write_text(source, encoding="utf-8")

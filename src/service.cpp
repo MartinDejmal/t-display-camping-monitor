@@ -8,6 +8,7 @@
 #include <ESPmDNS.h>
 #include <Update.h>
 #include <esp_system.h>
+#include <esp_heap_caps.h>
 #include <math.h>
 #include <lwip/apps/sntp.h>
 
@@ -154,6 +155,12 @@ void Service::status() {
     doc["version"] = FW_VERSION;
     doc["firmware_family"] = FIRMWARE_FAMILY;
     doc["variant"] = FORCE_SERVICE_MODE ? "bench-service" : USB_SENSE_WIRED ? "usb-sense" : "battery";
+    doc["uptime_s"] = millis() / 1000;
+    doc["free_heap_bytes"] = ESP.getFreeHeap();
+    doc["min_free_heap_bytes"] = ESP.getMinFreeHeap();
+    doc["largest_free_block_bytes"] = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    doc["loop_stack_free_min_bytes"] = uxTaskGetStackHighWaterMark(nullptr);
+    doc["reset_reason"] = static_cast<unsigned>(esp_reset_reason());
     doc["csrf"] = csrf_;
     doc["external"] = power_.external();
     doc["power_mode"] = FORCE_SERVICE_MODE ? "bench" : power_.external() ? "usb" : "battery";
@@ -295,7 +302,7 @@ void Service::csv() {
         if (chunk.length() >= 1024) { server_.sendContent(chunk); chunk = ""; }
         return true;
     });
-    if (!complete) { server_.client().stop(); return; } // incomplete chunked transfer is detectable by client
+    if (!complete) { server_.abortClient(); return; } // incomplete chunked transfer is detectable by client
     if (!chunk.isEmpty()) server_.sendContent(chunk);
     server_.sendContent("");
 }
@@ -348,14 +355,25 @@ void Service::configure() {
 void Service::upload() {
     HTTPUpload &u = server_.upload();
     if (u.status == UPLOAD_FILE_START) {
+        if (updating() || ota_.trial()) {
+            uploadAuthorized_ = false;
+            error(409, "Firmware update or trial boot already in progress");
+            server_.abortClient(); return;
+        }
         uploadAuthorized_ = loginAllowed(settings_.authEnabled, server_.authenticate("admin", settings_.adminPassword.c_str())) &&
             writeAllowed(power_.external(), server_.header("X-CSRF-Token") == csrf_);
         uploadError_ = "";
         uploadOK_ = false;
         familySeen_ = false;
         familyMatch_ = 0;
-        if (!uploadAuthorized_) return;
-        if (u.name != "firmware" || !u.filename.endsWith(".bin")) { uploadError_ = "Select firmware.bin"; return; }
+        if (!uploadAuthorized_) {
+            error(403, "Authentication, USB power and session token required");
+            server_.abortClient(); return;
+        }
+        Serial.println("OTA: upload started");
+        if (u.name != "firmware" || !u.filename.endsWith(".bin")) {
+            error(400, "Select firmware.bin"); server_.abortClient(); return;
+        }
         if (!ota_.stage()) { uploadError_ = "Cannot arm OTA guard"; return; }
         uploading_ = Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH);
         if (!uploading_) { uploadError_ = Update.errorString(); ota_.cancel(); }
@@ -381,6 +399,7 @@ void Service::upload() {
             Update.abort(); uploading_ = false; ota_.cancel(); return;
         }
         uploadOK_ = Update.end(true);
+        Serial.printf("OTA: upload %s (%u bytes)\n", uploadOK_ ? "accepted" : "failed", static_cast<unsigned>(u.totalSize));
         uploading_ = false;
         if (!uploadOK_) { uploadError_ = Update.errorString(); ota_.cancel(); }
     } else if (u.status == UPLOAD_FILE_ABORTED) {

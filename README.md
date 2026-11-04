@@ -6,7 +6,7 @@ Měří standardně jednou za minutu, ukládá historii do interní flash a mezi
 
 ## Stav
 
-Implementace 0.4.0: všechny tři varianty se sestavují. Hostitelské testy ověřují formát, skutečný kód hodin a úložiště, tlakové grafy, samostatné webové stránky a volitelné přihlášení. Na COM14 byla ověřena identifikace BMP085/BMP180, dvě minutová měření a uložené CSV: první vzorek bez UTC, druhý po synchronizaci ze sítě, stále s odstupem 60 s. **Funkční BME280, odběry, kompletní OTA na desce a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
+Implementace 0.4.1: všechny tři varianty se sestavují. Hostitelské testy ověřují skutečné hodiny, úložiště, omezený HTTP parser, tlakové grafy a samostatné webové stránky. Na COM14 prošly BMP085/BMP180, ukládání bez UTC i se synchronizací, skutečný deep sleep (0/60/120 s), úspěšná a přerušená OTA, odmítnutí nesprávného obrazu a návrat po neúspěšném prvním startu. **Funkční BME280, odběry, odpojení USB během OTA a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
 
 Nová implementace je ve větvi `main`. Původní funkční příklad zachovává lokální tag `baseline-working-20261104`; zdrojový ZIP, referenční firmware a úplná 4MB záloha původní desky jsou v lokální ignorované složce `work/baseline/`. Zachována je konfigurace displeje; DHT22, externí baterie a původní obrazovky byly nahrazeny.
 
@@ -100,7 +100,7 @@ Navigace obsahuje samostatné stránky, každá má vlastní URL a načte se ze 
 |---|---|---|
 | Přehled | `/` | Aktuální hodnoty a základní stav |
 | Historie | `/history` | Teplota / tlak / vlhkost, min/max, 8 h / 24 h / 7 dní / 30 dní; výběr relace a CSV |
-| Zařízení | `/device` | Napájení, senzor, další měření, poslední zápis, počet a rozsah záznamů, úložiště |
+| Zařízení | `/device` | Napájení, senzor, další měření, poslední zápis, počet a rozsah záznamů, úložiště, běh a rezerva paměti |
 | Nastavení | `/settings` | Měření, displej, síť, přístup, import/export bez hesel a restart |
 | Čas | `/time` | Stav UTC, NTP, nastavení z prohlížeče nebo provoz jen s relativním časem |
 | Firmware | `/firmware` | OTA souborem `.pio/build/<environment>/firmware.bin` |
@@ -110,6 +110,8 @@ Interval lze nastavit na 60–3600 s, jas 1–255 a timeout 5–120 s. Historie 
 Konfigurace se validuje a zapisuje jako jediný NVS blob. Prázdné pole hesla ponechá existující heslo; otevřenou Wi-Fi lze nastavit explicitní prázdnou hodnotou přes API. Import nejprve vyplní formulář. Změna sítě a AP hesla vyžaduje restart; webové heslo platí ihned. Dlouhé vlastní heslo displej nevypisuje celé.
 
 HTTP Basic autentizace je ve výchozím stavu zapnutá a lze ji vypnout v Nastavení → Přístup k webu. Přepínač platí i pro CSV a OTA; heslo webu a chráněného AP se zachová, AP tím nevznikne otevřené. Náhodný CSRF token se pro změny vyžaduje i bez přihlášení. POST vyžadují servisní napájení. HTTP nemá TLS; rozhraní je určeno do důvěryhodné místní sítě, nikoli k vystavení na internet.
+
+HTTP příjem má omezené délky a čas: JSON do 1536 B, běžný požadavek nejvýše 3 s, OTA nejvýše 180 s a 10 s bez příchozích dat. OTA přijímá jeden soubor `firmware` a streamuje ho po blocích. Zápisy do klienta mají také časový limit; klient, který přestane číst, se odpojí a neúplný CSV/JSON přenos se nevydává za dokončený.
 
 ## Historie, čas a baterie
 
@@ -155,3 +157,11 @@ python tools/check.py
 Host kontroly potřebují C++11 `g++` a Node.js; mimo PATH použij `--cxx <cesta>` a `--node <cesta>`. Spouštějí skutečný kód formátu, hodin, plánování a úložiště nad souborovým testovacím prostředím a skutečný JS webu nad simulovaným API. Nepotvrzují chování flash, ADC, Wi-Fi ani spánku na ESP32.
 
 GitHub Actions sestaví všechny varianty, provede kontroly a uloží firmware, bootloader a tabulku oddílů jako artefakty. Viz [plán ověření na desce](docs/VALIDATION.md) a [přehled implementace](docs/IMPLEMENTATION.md).
+
+Dlouhodobá kontrola připojeného servisního zařízení (pouze čtení):
+
+```sh
+python tools/soak.py --url http://192.168.0.120 --port COM14 --seconds 21600 --output work/soak-run
+```
+
+Sériový port je volitelný; jeho otevření desku neresetuje. Se zapnutým přihlášením předej heslo proměnnou prostředí `TDLOGGER_ADMIN_PASSWORD` (uživatel `admin`). Výstupy neobsahují heslo ani CSRF token. Každý běh potřebuje novou výstupní složku. Kontrolují se stav, graf, CSV, časování zápisů, restarty a paměť. Soubor `stop` ve výstupní složce běh ukončí. Na Windows proces dočasně brání automatickému uspání počítače, bez změny uloženého napájecího plánu. Tento USB test neověřuje bateriovou výdrž.
