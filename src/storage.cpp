@@ -220,6 +220,20 @@ void Storage::includeInSummary(const logger::Record &r) {
         it = summary_.sessions.end() - 1;
     }
     ++it->count;
+    if (r.flags & logger::FLAG_SENSOR_OK) {
+        auto &b = it->extrema;
+        if (!b.valid) {
+            b.valid = true; b.session = r.session;
+            b.minT = b.maxT = r.temperature; b.minP = b.maxP = r.pressure;
+        } else {
+            b.minT = std::min(b.minT, r.temperature); b.maxT = std::max(b.maxT, r.temperature);
+            b.minP = std::min(b.minP, r.pressure); b.maxP = std::max(b.maxP, r.pressure);
+        }
+        if (logger::hasHumidity(r)) {
+            if (!b.humidityValid) { b.minH = b.maxH = r.humidity; b.humidityValid = true; }
+            else { b.minH = std::min(b.minH, r.humidity); b.maxH = std::max(b.maxH, r.humidity); }
+        }
+    }
     if (r.flags & logger::FLAG_SENSOR_OK) ++it->good;
     it->lastElapsed = r.elapsedS;
     it->lastEpoch = r.flags & logger::FLAG_UTC ? r.epoch : 0;

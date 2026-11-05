@@ -198,6 +198,21 @@ void Service::status() {
     doc["record_count"] = history.count;
     doc["valid_record_count"] = history.good;
     doc["session_count"] = history.sessionCount;
+    doc["session_minmax"] = nullptr;
+    SessionSummary current;
+    if (storage_.sessionInfo(clock_.session(), current) && current.extrema.valid) {
+        const auto &b = current.extrema;
+        JsonObject range = doc.createNestedObject("session_minmax");
+        range["temperature_min"] = b.minT / 100.0f;
+        range["temperature_max"] = b.maxT / 100.0f;
+        range["pressure_min_hpa"] = b.minP / 100.0f;
+        range["pressure_max_hpa"] = b.maxP / 100.0f;
+        range["humidity_min"] = nullptr; range["humidity_max"] = nullptr;
+        if (b.humidityValid) {
+            range["humidity_min"] = b.minH / 100.0f;
+            range["humidity_max"] = b.maxH / 100.0f;
+        }
+    }
     auto location = [&](const char *name, const logger::Record &r, bool present) {
         if (!present) { doc[name] = nullptr; return; }
         JsonObject obj = doc.createNestedObject(name);

@@ -116,10 +116,24 @@ int main(int argc,char **argv) {
     SessionSummary session;
     assert(reopened.sessionInfo(1,session) && session.count==4 && session.firstElapsed==60 && session.lastElapsed==240);
     assert(reopened.sessionInfo(2,session) && session.count==1 && session.lastElapsed==1);
+    assert(session.extrema.valid && session.extrema.minT==8000 && session.extrema.maxT==8000);
+    assert(reopened.sessionInfo(1,session) && session.extrema.minT==-1250 && session.extrema.maxT==-1250);
+    assert(session.extrema.minP==98574 && session.extrema.maxP==100000);
+    assert(session.extrema.humidityValid && session.extrema.minH==0 && session.extrema.maxH==5600);
+    auto invalid=record(300);invalid.flags=0;invalid.temperature=-4000;invalid.pressure=110000;
+    assert(reopened.append(invalid));
+    assert(reopened.sessionInfo(1,session) && session.extrema.minT==-1250 && session.extrema.maxP==100000);
+    auto extreme=record(360);extreme.temperature=2534;extreme.pressure=101234;extreme.humidity=7890;
+    assert(reopened.append(extreme));
+    assert(reopened.sessionInfo(1,session) && session.extrema.maxT==2534 && session.extrema.maxP==101234 && session.extrema.maxH==7890);
+    Storage again;assert(again.begin());
+    assert(again.sessionInfo(1,session) && session.extrema.maxT==2534 && session.extrema.minH==0);
     reopened.historyForSession(1,240,3600,bins,1);
     assert(bins[0].valid && bins[0].maxT==-1250 && bins[0].minP==98574); // no joining by wrong UTC
     reopened.historyForSession(2,1,3600,bins,1);
     assert(bins[0].valid && bins[0].maxT==8000 && bins[0].minP==90000);
+    fixture(base,"bmp-extrema");Storage bmpOnly;assert(bmpOnly.begin());assert(bmpOnly.append(bmp));
+    assert(bmpOnly.sessionInfo(1,session) && session.extrema.valid && !session.extrema.humidityValid);
     fixture(base,"wrong-date");
     Storage timeless;assert(timeless.begin());
     for(uint32_t i=0;i<1440;++i){auto r=record(i*60);r.epoch=1704067200+i*60;r.flags|=logger::FLAG_UTC;assert(timeless.append(r));}

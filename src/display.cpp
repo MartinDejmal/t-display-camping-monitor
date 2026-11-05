@@ -38,30 +38,64 @@ void Display::header(const char *title) {
     tft_.drawFastHLine(6, 23, 228, TFT_DARKGREY);
     tft_.setTextColor(TFT_WHITE, TFT_BLACK);
 }
-void Display::values(const Reading &r, float battery, bool external, const Storage &storage) {
+void Display::unitText(const char *text, int x, int y, uint8_t font, uint16_t color) {
+    tft_.setTextColor(color, TFT_BLACK);
+    // Built-in fonts have inconsistent Unicode coverage. Draw a real degree
+    // ring at the text baseline's top, including in the tiny session labels.
+    while (const char *degree = strstr(text, "\xc2\xb0")) {
+        const String prefix = String(text).substring(0, degree - text);
+        x += tft_.drawString(prefix, x, y, font);
+        const int radius = font == 4 ? 2 : 1;
+        tft_.drawCircle(x + radius + 1, y + radius + 1, radius, color);
+        x += 2 * radius + 3;
+        text = degree + 2;
+    }
+    tft_.drawString(text, x, y, font);
+}
+void Display::values(const Reading &r, float battery, bool external, Storage &storage, uint32_t session) {
     if (!awake_) return;
     header(sensorTypeName(r.type));
+    tft_.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    tft_.drawString("Session min/max", 137, 8, 1);
     if (r.valid) {
         char value[32];
-        snprintf(value, sizeof(value), "%.1f C", r.temperature);
-        tft_.drawString(value, 7, 29, 4);
+        snprintf(value, sizeof(value), "%.1f°C", r.temperature);
+        unitText(value, 7, 27, 4, TFT_WHITE);
         if (r.humidityAvailable) {
             snprintf(value, sizeof(value), "%.1f %%", r.humidity);
-            tft_.drawString(value, 7, 63, 4);
-        } else tft_.drawString("RH: n/a", 7, 67, 2);
+            tft_.drawString(value, 7, 70, 4);
+        } else tft_.drawString("RH: n/a", 7, 74, 2);
         snprintf(value, sizeof(value), "%.1f hPa", r.pressure / 100);
-        tft_.drawString(value, 137, 70, 2);
+        tft_.drawString(value, 137, 73, 2);
     } else {
         tft_.setTextColor(TFT_ORANGE, TFT_BLACK);
         tft_.drawString("Sensor unavailable", 7, 42, 2);
         tft_.drawString(r.error.isEmpty() ? "Check 3V / G / 21 / 22" : r.error, 7, 64, 2);
     }
+    SessionSummary info;
+    if (r.valid && storage.sessionInfo(session, info) && info.extrema.valid) {
+        const auto &b = info.extrema;
+        char range[64];
+        snprintf(range, sizeof(range), "min %.1f°C  max %.1f°C", b.minT / 100.0f, b.maxT / 100.0f);
+        unitText(range, 7, 56, 1, TFT_LIGHTGREY);
+        if (r.humidityAvailable && b.humidityValid) {
+            snprintf(range, sizeof(range), "min %.1f max %.1f%%", b.minH / 100.0f, b.maxH / 100.0f);
+            tft_.drawString(range, 7, 99, 1);
+        }
+        snprintf(range, sizeof(range), "min %.1f hPa", b.minP / 100.0f);
+        tft_.drawString(range, 137, 92, 1);
+        snprintf(range, sizeof(range), "max %.1f hPa", b.maxP / 100.0f);
+        tft_.drawString(range, 137, 102, 1);
+    } else if (r.valid) {
+        tft_.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft_.drawString("Session min/max: no stored samples", 7, 56, 1);
+    }
     tft_.setTextColor(storage.ready() && storage.error().isEmpty() ? TFT_LIGHTGREY : TFT_RED, TFT_BLACK);
     String power = external ? "USB / service" : isfinite(battery) ? String(battery, 2) + " V" : "Battery unknown";
-    tft_.drawString(power, 7, 100, 2);
-    tft_.drawString(storage.ready() && storage.error().isEmpty() ? "Log OK" : "Log ERROR", 151, 100, 2);
+    tft_.drawString(power, 7, 114, 1);
+    tft_.drawString(storage.ready() && storage.error().isEmpty() ? "Log OK" : "Log ERROR", 171, 114, 1);
     tft_.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    tft_.drawString("Right: graph   Left: info", 7, 120, 1);
+    tft_.drawString("Right: graph   Left: info", 7, 126, 1);
 }
 void Display::graph(Storage &storage, const ClockState &clock, bool pressure) {
     if (!awake_) return;
@@ -84,8 +118,9 @@ void Display::graph(Storage &storage, const ClockState &clock, bool pressure) {
         const uint16_t color = channel ? TFT_CYAN : TFT_ORANGE;
         tft_.setTextColor(color, TFT_BLACK);
         char label[48];
-        snprintf(label, sizeof(label), "%s %.1f .. %.1f", channel ? (pressure ? "P hPa" : "RH %") : "T C", low, high);
-        tft_.drawString(label, 7, top - 13, 1);
+        if (!channel) snprintf(label, sizeof(label), "T %.1f°C .. %.1f°C", low, high);
+        else snprintf(label, sizeof(label), "%s %.1f .. %.1f", pressure ? "P hPa" : "RH %", low, high);
+        unitText(label, 7, top - 13, 1, color);
         tft_.drawFastHLine(16, top + height, N, TFT_DARKGREY);
         if (empty) tft_.drawString("No data in this session", 20, top + 8, 1);
         int lastX = -1, lastY = 0;

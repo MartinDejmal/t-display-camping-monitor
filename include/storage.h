@@ -18,6 +18,7 @@ struct SessionSummary {
     uint32_t id = 0, count = 0, good = 0;
     uint32_t firstElapsed = 0, lastElapsed = 0;
     uint32_t firstEpoch = 0, lastEpoch = 0;
+    HistoryBin extrema; // valid stored samples of this session, not just graph window
 };
 struct HistorySummary {
     uint32_t count = 0, good = 0, sessionCount = 0;

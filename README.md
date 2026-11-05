@@ -6,6 +6,8 @@ Měří standardně jednou za minutu, ukládá historii do interní flash a mezi
 
 ## Stav
 
+Aktuální verze **0.4.2** přidává na displeji symbol ° k teplotám a menším písmem min/max teploty, vlhkosti a tlaku z dochovaných platných vzorků aktuální relace. BMP vlhkost nezobrazuje. Reset založí novou relaci; deep sleep ji zachová. Čerstvé neuložené měření na displeji do těchto historických min/max nevstupuje.
+
 Implementace 0.4.1: všechny tři varianty se sestavují. Hostitelské testy ověřují skutečné hodiny, úložiště, omezený HTTP parser, tlakové grafy a samostatné webové stránky. Na COM14 prošly BMP085/BMP180, ukládání bez UTC i se synchronizací, skutečný deep sleep (0/60/120 s), úspěšná a přerušená OTA, odmítnutí nesprávného obrazu a návrat po neúspěšném prvním startu. **Funkční BME280, odběry, odpojení USB během OTA a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
 
 Nová implementace je ve větvi `main`. Původní funkční příklad zachovává lokální tag `baseline-working-20261104`; zdrojový ZIP, referenční firmware a úplná 4MB záloha původní desky jsou v lokální ignorované složce `work/baseline/`. Zachována je konfigurace displeje; DHT22, externí baterie a původní obrazovky byly nahrazeny.

@@ -87,6 +87,14 @@ Servisní varianta, BMP085/180 na 0x77, interval 60 s. Monitor běžel přibliž
 
 Výsledek potvrzuje měření, ukládání a obsluhu webu v tomto konkrétním běhu. **Nejde o test bateriové výdrže:** USB napájelo servisní variantu s trvale zapnutou Wi-Fi. Odběry, VBUS detekce, skutečný BME280 s vlhkostí, odpojení USB během OTA a alespoň 72hodinový bateriový test nadále zbývají ověřit.
 
+## Symbol stupně a min/max relace ve 0.4.2 — 5. 11. 2026
+
+- Teploty na displeji a v grafu mají °C; symbol je kreslený jako kroužek, nezávisle na podpoře Unicode vestavěných fontů. Aktuální hodnoty doplňují drobné min/max teploty, vlhkosti a tlaku z platných uložených vzorků aktuální relace. Chyby senzoru se do extrémů nezapočítávají a BMP nemá vymyšlenou vlhkost.
+- Souhrny se načtou z historie při prvním použití a průběžně aktualizují při zápisu. Formát historie ani konfigurace se nemění. Rozložení 240 × 135 bylo zkontrolováno podle skutečných šířek použitých fontů i pro krajní teploty, 100 % RH a tlak 1100 hPa; nejde o fotografické ověření displeje.
+- Native test úložiště ověřil oddělení relací, záporné teploty, skutečných 0 % RH, BMP bez vlhkosti, ignorování chybných vzorků, aktualizaci extrémů po zápisu a jejich obnovení po otevření historie. Všechny host kontroly i všechny tři buildy prošly.
+- Servisní 0.4.2 nahrána přes COM14 s ověřením hashů. Dvě plánovaná BMP měření v relaci 43: min/max T 24,5/24,5 °C, P 983,89/984,01 hPa; oba vlhkostní extrémy null. `/api/status.session_minmax` souhlasil se skutečnými CSV řádky, úložiště bez chyby. Všech 516 řádků závěrečného nočního CSV zůstalo zachováno jako přesný prefix exportu.
+- Lokální podklady: `work/extrema-checks.log`, `work/extrema-build.log`, `work/extrema-upload.log`, `work/extrema-live.json`.
+
 ## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.

@@ -60,7 +60,7 @@ void render() {
         if (service.running()) display.service(service.network(), service.ip(), settings.adminPassword, settings.authEnabled);
         else display.message("Service unavailable", USB_SENSE_WIRED ? "Connect USB power" : "USB sense not fitted");
         break;
-    default: display.values(reading, battery, power.external(), storage); break;
+    default: display.values(reading, battery, power.external(), storage, clockState.session()); break;
     }
 }
 void sampleDue() {

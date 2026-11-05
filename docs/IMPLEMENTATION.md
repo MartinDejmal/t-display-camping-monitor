@@ -53,4 +53,6 @@ V 0.3.0 přidává CSV poslední dvě pole `humidity_available` (platná hodnota
 
 Ve 0.4.1 `/api/status` navíc obsahuje `uptime_s`, `free_heap_bytes`, `min_free_heap_bytes`, `largest_free_block_bytes`, `loop_stack_free_min_bytes` a `reset_reason` (ESP-IDF). Pole slouží dlouhodobému sledování přes `tools/soak.py`. Grafové koše displeje jsou statické, aby přibližně 5 KiB nespotřebovávaly 8KiB zásobník hlavní smyčky. Formát záznamů a nastavení zůstává kompatibilní.
 
+Ve 0.4.2 `session_minmax` ve statusu obsahuje `temperature_min`, `temperature_max` (°C), `pressure_min_hpa`, `pressure_max_hpa`, `humidity_min`, `humidity_max` (% RH). Bez platného uloženého vzorku je celý objekt null; bez dostupné vlhkosti jsou null její dva extrémy. Stejný souhrn používá displej; rozsah je celá dostupná historie aktuální relace, nezávisle na grafovém okně a UTC.
+
 Běžný HTTP požadavek má limit 3 s, jednotlivý socketový zápis 1,5 s. Při OTA se měření záměrně pozastaví; při 10 s bez příchozích dat nebo celkem 180 s se přenos přeruší a původní aplikace pokračuje.
