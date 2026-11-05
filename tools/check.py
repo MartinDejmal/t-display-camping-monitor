@@ -35,7 +35,8 @@ def partitions():
         assert image.stat().st_size <= slots[0], f"Firmware exceeds OTA slot: {image}"
         usb = int(image.parent.name.endswith("usb-sense"))
         bench = int(image.parent.name.endswith("service"))
-        marker = f"|TDLOGGER:ORIGINAL:USB={usb}:BENCH={bench}:RECORD=2:PART=1|".encode()
+        sense = ":SENSE=33" if usb else ""
+        marker = f"|TDLOGGER:ORIGINAL:USB={usb}:BENCH={bench}:RECORD=2:PART=1{sense}|".encode()
         assert marker in image.read_bytes(), f"Missing OTA compatibility marker: {image}"
         print(f"Image {image.parent.name}: {image.stat().st_size} / {slots[0]} bytes")
     print("Partitions: aligned, non-overlapping, dual OTA, 30-day payload fits")

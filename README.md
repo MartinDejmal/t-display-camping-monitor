@@ -6,7 +6,9 @@ Měří standardně jednou za minutu, ukládá historii do interní flash a mezi
 
 ## Stav
 
-Aktuální verze **0.4.2** přidává na displeji symbol ° k teplotám a menším písmem min/max teploty, vlhkosti a tlaku z dochovaných platných vzorků aktuální relace. BMP vlhkost nezobrazuje. Reset založí novou relaci; deep sleep ji zachová. Čerstvé neuložené měření na displeji do těchto historických min/max nevstupuje.
+Aktuálně **0.4.3**: finální varianta `ttgo-t-display-usb-sense` používá dělič VBUS na pinu **33**. Uživatel ověřil 2,42 V při USB a 0,12 V pouze na akumulátoru. Servis se zapíná automaticky na USB; na baterii se Wi-Fi vypne a mezi měřeními se používá deep sleep.
+
+Verze **0.4.2** přidala na displeji symbol ° k teplotám a menším písmem min/max teploty, vlhkosti a tlaku z dochovaných platných vzorků aktuální relace. BMP vlhkost nezobrazuje. Reset založí novou relaci; deep sleep ji zachová. Čerstvé neuložené měření na displeji do těchto historických min/max nevstupuje.
 
 Implementace 0.4.1: všechny tři varianty se sestavují. Hostitelské testy ověřují skutečné hodiny, úložiště, omezený HTTP parser, tlakové grafy a samostatné webové stránky. Na COM14 prošly BMP085/BMP180, ukládání bez UTC i se synchronizací, skutečný deep sleep (0/60/120 s), úspěšná a přerušená OTA, odmítnutí nesprávného obrazu a návrat po neúspěšném prvním startu. **Funkční BME280, odběry, odpojení USB během OTA a 72hodinový bateriový test zbývají ověřit. Výdrž není změřená.**
 
@@ -41,14 +43,14 @@ U BMP je vlhkost na displeji `RH: n/a`, na webu `Neměří` a v JSON `null` při
 Volitelná detekce externího napájení:
 
 ```text
-skutečné USB VBUS --- 100 kOhm ---+--- pin 32
+skutečné USB VBUS --- 100 kOhm ---+--- pin 33
                                 |
                              100 kOhm
                                 |
 USB GND ------------------------+--- G
 ```
 
-**VBUS není vývod `5V` na T-Display.** Ten je součástí společné napájecí větve. Použij skutečné VBUS z průchozího USB adaptéru nebo ověřený bod na své revizi desky. ESP32 se nesmí připojit přímo na 5 V. Původní externí baterii/dělič z pinu `32` odpoj.
+**VBUS není vývod `5V` na T-Display.** Ten je součástí společné napájecí větve. Použij skutečné VBUS z průchozího USB adaptéru nebo ověřený bod na své revizi desky. ESP32 se nesmí připojit přímo na 5 V. Vstup tohoto děliče patří na VBUS, nikoli VBAT.
 
 Akumulátor: 1S LiPo přes konektor desky s ověřenou polaritou. Pravé tlačítko používá GPIO35 a fyzický pull-up desky; GPIO35 nemá interní pull-up. Levé tlačítko je GPIO0 (boot strap).
 
@@ -56,7 +58,7 @@ Akumulátor: 1S LiPo přes konektor desky s ověřenou polaritou. Pravé tlačí
 
 | PlatformIO environment | Použití |
 |---|---|
-| `ttgo-t-display` | Bez detekčního děliče. Bateriový logger; Wi-Fi vypnutá i při USB. Nezapojený pin 32 nespouští servis. |
+| `ttgo-t-display` | Bez detekčního děliče. Bateriový logger; Wi-Fi vypnutá i při USB. Nezapojený pin 33 nespouští servis. |
 | `ttgo-t-display-usb-sense` | Finální varianta po zapojení VBUS děliče. Automatický servis na USB, úsporný logger na baterii. |
 | `ttgo-t-display-service` | **Zkoušení před pájením.** Trvale zapnutý servis a Wi-Fi; předpokládá externí napájení. Nepoužívat pro měření výdrže ani ponechání na baterii. |
 
@@ -74,7 +76,7 @@ pio device monitor -b 115200
 pio run -e ttgo-t-display-usb-sense -t upload
 ```
 
-První nahrání nové verze musí proběhnout **přes USB**, protože zavádí novou tabulku oddílů a bootloader. OTA mění pouze aplikaci. Přechod mezi variantami zapojení proveď také přes USB; web OTA odmítne jinou variantu.
+První nahrání nové verze musí proběhnout **přes USB**, protože zavádí novou tabulku oddílů a bootloader. OTA mění pouze aplikaci. Přechod mezi variantami zapojení proveď také přes USB; web OTA odmítne jinou variantu. Od 0.4.3 značka USB varianty obsahuje také `SENSE=33`; starší USB obrazy pro pin 32 nejsou kompatibilní pro OTA a změna zapojení vyžaduje USB nahrání.
 
 **Přechod z 0.2.x na 0.3.0 také proveď přes USB.** Nové záznamy používají schéma v2 a značku kompatibility `RECORD=2`; starý OTA server správně tento obraz odmítne. Velikost záznamu i tabulka oddílů zůstávají stejné, uložená historie a konfigurace se nemažou. Firmware od 0.3.0 čte v1 i v2; aktualizace 0.3.0 → 0.4.0 formát ani oddíly nemění. Downgrade na 0.2.x neumí v2 číst a starý firmware odmítne za takovou historií zapisovat. Při zkušebním startu OTA se nové záznamy zapisují až po potvrzení zdravého startu, aby předchozí verze mohla provést časný rollback.
 

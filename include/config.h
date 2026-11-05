@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "pins.h"
 #ifndef USB_SENSE_WIRED
 #define USB_SENSE_WIRED 0
 #endif
@@ -11,9 +12,14 @@
 #endif
 #define LOGGER_STRINGIFY_INNER(x) #x
 #define LOGGER_STRINGIFY(x) LOGGER_STRINGIFY_INNER(x)
+#if USB_SENSE_WIRED
+#define LOGGER_SENSE_MARKER ":SENSE=" LOGGER_STRINGIFY(USB_SENSE_GPIO)
+#else
+#define LOGGER_SENSE_MARKER ""
+#endif
 // Compatibility marker, not a cryptographic signature. Used by web OTA preflight.
 constexpr char FIRMWARE_FAMILY[] = "|TDLOGGER:ORIGINAL:USB=" LOGGER_STRINGIFY(USB_SENSE_WIRED)
-    ":BENCH=" LOGGER_STRINGIFY(FORCE_SERVICE_MODE) ":RECORD=2:PART=1|";
+    ":BENCH=" LOGGER_STRINGIFY(FORCE_SERVICE_MODE) ":RECORD=2:PART=1" LOGGER_SENSE_MARKER "|";
 constexpr uint32_t DEFAULT_INTERVAL_S = 60;
 constexpr uint32_t HISTORY_SECONDS = 30UL * 86400;
 constexpr uint32_t GRAPH_SECONDS = 8UL * 3600;

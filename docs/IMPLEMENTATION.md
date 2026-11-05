@@ -13,7 +13,7 @@
 | 9. Web | Šest samostatných stránek, historie relací, stav, CSV, konfigurace, čas, volitelné přihlášení | Reálný prohlížeč a souběh exportu |
 | 10. OTA a výdrž | Dual slot, aplikační guard, CI a host testy | Skutečné OTA/rollback, spotřeba a 72 h |
 
-Aktuální servisní varianta 0.4.1 je nahraná na COM14. BMP085/180 měří a ukládá; konfigurace a historie se načetly. Ověřeny změna UTC bez posunu měření, skutečný deep sleep a úspěšná/přerušená OTA včetně návratu po nepotvrzeném startu. Podrobnosti jsou v VALIDATION.md. Aplikační guard má omezení popsaná v README.
+Aktuální varianta 0.4.3 s detekcí USB na pinu 33 je nahraná na COM14. BMP085/180 měří a ukládá; konfigurace a historie se načetly. Ověřeny změna UTC bez posunu měření, skutečný deep sleep a úspěšná/přerušená OTA včetně návratu po nepotvrzeném startu. Podrobnosti jsou v VALIDATION.md. Aplikační guard má omezení popsaná v README.
 
 ## Moduly
 
@@ -56,3 +56,5 @@ Ve 0.4.1 `/api/status` navíc obsahuje `uptime_s`, `free_heap_bytes`, `min_free_
 Ve 0.4.2 `session_minmax` ve statusu obsahuje `temperature_min`, `temperature_max` (°C), `pressure_min_hpa`, `pressure_max_hpa`, `humidity_min`, `humidity_max` (% RH). Bez platného uloženého vzorku je celý objekt null; bez dostupné vlhkosti jsou null její dva extrémy. Stejný souhrn používá displej; rozsah je celá dostupná historie aktuální relace, nezávisle na grafovém okně a UTC.
 
 Běžný HTTP požadavek má limit 3 s, jednotlivý socketový zápis 1,5 s. Při OTA se měření záměrně pozastaví; při 10 s bez příchozích dat nebo celkem 180 s se přenos přeruší a původní aplikace pokračuje.
+
+Od 0.4.3 USB varianta přidává do kompatibilitní značky `SENSE=33`. Přechod ze servisní varianty nebo starého zapojení GPIO32 se provádí přes USB. Vynucený servisní build zůstává samostatnou zkušební variantou.

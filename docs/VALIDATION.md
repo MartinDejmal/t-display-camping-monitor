@@ -95,6 +95,15 @@ Výsledek potvrzuje měření, ukládání a obsluhu webu v tomto konkrétním b
 - Servisní 0.4.2 nahrána přes COM14 s ověřením hashů. Dvě plánovaná BMP měření v relaci 43: min/max T 24,5/24,5 °C, P 983,89/984,01 hPa; oba vlhkostní extrémy null. `/api/status.session_minmax` souhlasil se skutečnými CSV řádky, úložiště bez chyby. Všech 516 řádků závěrečného nočního CSV zůstalo zachováno jako přesný prefix exportu.
 - Lokální podklady: `work/extrema-checks.log`, `work/extrema-build.log`, `work/extrema-upload.log`, `work/extrema-live.json`.
 
+## Automatická detekce USB na pinu 33 ve 0.4.3 — 5. 11. 2026
+
+- Uživatel připojil skutečné VBUS přes dělič 100 kΩ / 100 kΩ na pin 33 a změřil 2,42 V při USB a 0,12 V pouze na LiPo. Obě hodnoty vyhovují hysterezi: zapnutí servisu nad 1,9 V, vypnutí pod 1,5 V.
+- Mapování přesunuto z GPIO32 na GPIO33. Na COM14 nahrána varianta `ttgo-t-display-usb-sense`, nikoli vynucený bench servis. Její OTA značka obsahuje `SENSE=33`, aby nebyl přijat starší USB obraz pro jiné zapojení.
+- Všechny tři varianty se sestavily a všechny hostitelské kontroly prošly, včetně nové kontroly OTA značky GPIO33. USB nahrání dokončeno s ověřením hashů.
+- Skutečný status po nahrání: 0.4.3, `variant=usb-sense`, `power_mode=usb`, `external=true`, `BENCH=0`, `SENSE=33`. BMP085/180 měří; v nové relaci 51 ověřeny dva plánované uložené vzorky. Konfigurace se zachovala a všech 1415 řádků předaktualizačního exportu zůstalo přesným prefixem nového CSV.
+- Při USB je `battery_v=null` záměrně: ADC měří společnou napájecí větev. Samotné napětí baterie se čte až při bateriovém provozu. Fyzické odpojení USB a automatický přechod nové sestavy na baterii zatím nebyly agentem přímo pozorovány; měřené vstupní napětí bez USB potvrdil uživatel.
+- Lokální podklady: `work/usb33-build.log`, `work/usb33-checks.log`, `work/usb33-upload.log`, `work/usb33-live.json`.
+
 ## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.
@@ -107,7 +116,7 @@ Výsledek potvrzuje měření, ukládání a obsluhu webu v tomto konkrétním b
 
 ## Po zapojení
 
-- [ ] Na pinu 32 přibližně 2,5 V při USB a 0 V bez USB; ověřit skutečné VBUS.
+- [x] Uživatel na pinu 33 ověřil 2,42 V při USB a 0,12 V pouze na baterii; přívod děliče přesunut z VBAT na VBUS.
 - [ ] BME280 na 3V/G/21/22, správné a čerstvé T/RH/P.
 - [ ] Nahrát `ttgo-t-display-usb-sense` přes USB.
 - [ ] Servis na USB a vypnutá Wi-Fi po odpojení.
