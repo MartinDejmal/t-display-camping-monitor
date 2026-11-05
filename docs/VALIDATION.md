@@ -71,7 +71,21 @@ Po výměně uživatelem za jiný modul (pravděpodobně BMP180) byla na COM14 o
 - V reálném prohlížeči ověřena stránka Zařízení a tlakový graf z desky včetně relací, vedle předchozího lokálního náhledu.
 - Skutečný deep sleep: na USB dočasně nahrána běžná bateriová varianta bez Wi-Fi (nejde o měření odběru). Relace 38 má tři platné BMP záznamy v časech 0, 60 a 120 s a dva `DEEPSLEEP_RESET`. Po obnovení servisu CSV potvrdilo všechny tři vzorky s prázdným UTC a chybějící RH. Správné datum nebylo potřeba.
 - Lokální důkazy: `work/bounded-checks.log`, `work/bounded-build.log`, `work/ota-live-04.log`, `work/ota-live-04-serial.log`, `work/idle-ota-041.log`, `work/http-stress-final-041.log`, `work/final-041.log`, `work/sleep-041-summary.json`, `work/sleep-041-serial.log`, `work/ota-final-release-041.log`. Před OTA uložena další lokální 4MiB záloha `work/before-ota-04-COM14.bin`; není publikována.
-- Krátký běh monitoru: 35 s, 5 požadavků, bez chyb, jeden nový vzorek a stabilní RAM. Dlouhodobý noční test bude vyhodnocen samostatně. Tyto kontroly neověřují bateriovou výdrž, VBUS dělič, odpojení USB během OTA ani selhání před spuštěním aplikačního guardu.
+- Krátký běh monitoru: 35 s, 5 požadavků, bez chyb, jeden nový vzorek a stabilní RAM. Výsledek delšího nočního testu je níže. Tyto kontroly neověřují bateriovou výdrž, VBUS dělič, odpojení USB během OTA ani selhání před spuštěním aplikačního guardu.
+
+## Noční USB test 0.4.1 — 5. 11. 2026
+
+Servisní varianta, BMP085/180 na 0x77, interval 60 s. Monitor běžel přibližně od 00:55:32 do 06:24 SEČ a skončil přirozeně po **19 708,7 s (5 h 28 min 29 s)**. Během testu se firmware ani konfigurace neměnily.
+
+- Přibylo **328 úspěšných měření a zápisů**, počet uložených záznamů vzrostl z 188 na 516. Všech 328 vzorků ze sériového logu přesně odpovídá novým CSV řádkům v čase, teplotě i tlaku. Chybějící vlhkost zůstala prázdná a označená jako nedostupná.
+- **Žádný restart ani vynechaný vzorek.** Po celou dobu relace 40; všech 332 záznamů této relace v konečném CSV má rozestup přesně 60 s podle relativního času. Sériový log má 328 vzorků s `sensor=ok log=ok`; všech 1314 statusových odpovědí má funkční čidlo a prázdné chyby úložiště/OTA.
+- Provedeno **1678 HTTP požadavků, jeden skončil timeoutem připojení** v 01:17:40 SEČ. Následující polling se zotavil bez zásahu, bez změny relace a bez dopadu na minutové vzorky. Přesná příčina tohoto izolovaného timeoutu nebyla prokázána. Medián úspěšných odpovědí 0,078 s, maximum 1,422 s.
+- Paměť po počátečním zahřátí zůstala stabilní: medián volné RAM prvního 20minutového okna 203 888 B, posledního 203 672 B (rozdíl 216 B). Největší volný blok byl celou dobu 110 580 B. Minimum volné RAM 181 032 B; nejmenší rezerva zásobníku hlavní smyčky 4812 B. V této délce testu nebyl pozorován soustavný únik paměti.
+- Průběžné a závěrečné exporty zachovaly původní řádky. Po skončení monitoru nová kontrola webu potvrdila stejnou relaci, funkční měření, další uložený vzorek a zachování všech 516 řádků závěrečného testovacího CSV jako přesného prefixu nového exportu.
+- Monitor ukončil proces, uvolnil COM14 a dočasný požadavek Windows na neusínání. Deska dále běží se servisním firmwarem 0.4.1. Lokální podklady jsou v ignorované `work/soak-20261105/`: `summary.json`, `analysis.json`, `metrics.jsonl`, `serial.log`, `latest.csv`, `post-run-check.json`. Souhrnný výstup hlásí jednu událost kvůli uvedenému timeoutu; není vydáván za běh bez síťových chyb.
+- Kód revize `7a52736` prošel i [GitHub CI](https://github.com/MartinDejmal/t-display-camping-monitor/actions/runs/41937451198): všechny tři varianty a hostitelské kontroly na Linuxu.
+
+Výsledek potvrzuje měření, ukládání a obsluhu webu v tomto konkrétním běhu. **Nejde o test bateriové výdrže:** USB napájelo servisní variantu s trvale zapnutou Wi-Fi. Odběry, VBUS detekce, skutečný BME280 s vlhkostí, odpojení USB během OTA a alespoň 72hodinový bateriový test nadále zbývají ověřit.
 
 ## Před pájením: USB a servisní varianta — kontrolní body
 

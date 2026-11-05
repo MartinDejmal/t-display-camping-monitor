@@ -10,6 +10,8 @@ Implementace 0.4.1: všechny tři varianty se sestavují. Hostitelské testy ov�
 
 Nová implementace je ve větvi `main`. Původní funkční příklad zachovává lokální tag `baseline-working-20261104`; zdrojový ZIP, referenční firmware a úplná 4MB záloha původní desky jsou v lokální ignorované složce `work/baseline/`. Zachována je konfigurace displeje; DHT22, externí baterie a původní obrazovky byly nahrazeny.
 
+Noční USB test 0.4.1 trval 5 h 28 min: 328 nových záznamů po 60 s, bez restartu či chyby ukládání, se stabilní pamětí. Jeden z 1678 HTTP požadavků měl přechodný timeout bez dopadu na měření. Podrobnosti a omezení jsou v [záznamu ověření](docs/VALIDATION.md).
+
 ## Zapojení
 
 Displej k sobě, USB dole. Použité popisky přímo na desce:
