@@ -7,6 +7,7 @@
 #include "sensor.h"
 #include "power.h"
 #include "ota_guard.h"
+#include "network.h"
 class Service {
 public:
     Service(Settings &settings, ClockState &clock, Storage &storage,
@@ -17,6 +18,7 @@ public:
     bool running() const { return running_; }
     bool updating() const { return uploading_ || rebootAt_ != 0; }
     bool available() const;
+    int wifiIndex() const { return wifi_.index(); }
     String network() const;
     String ip() const;
     void setTick(std::function<void()> tick) { tick_ = tick; }
@@ -27,9 +29,12 @@ private:
     Power &power_;
     OtaGuard &ota_;
     Reading &reading_;
+    WifiConnector wifi_{settings_};
     BoundedWebServer server_{80};
     bool running_ = false, ap_ = false, connected_ = false, routes_ = false;
     bool ntpStarted_ = false;
+    bool scanning_ = false;
+    uint32_t scanAt_ = 0;
     bool uploading_ = false, uploadAuthorized_ = false, uploadOK_ = false;
     bool familySeen_ = false;
     size_t familyMatch_ = 0;
@@ -39,6 +44,8 @@ private:
     bool authorize(bool write = false);
     void routes();
     void startAP();
+    void scanWifi(bool start);
+    int pollScan();
     void status();
     void sessions();
     void page(const char *id, const char *title, const char *body);

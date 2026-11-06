@@ -1,4 +1,5 @@
 #include "service.h"
+#include <esp_wifi.h>
 #include "web_ui.h"
 #include "settings.h"
 #include "ota_marker.h"
@@ -40,6 +41,9 @@ void Service::routes() {
     server_.on("/history", HTTP_GET, [this]() { if (authorize()) page("history", "Historie", PAGE_HISTORY); });
     server_.on("/device", HTTP_GET, [this]() { if (authorize()) page("device", "Zařízení", PAGE_DEVICE); });
     server_.on("/settings", HTTP_GET, [this]() { if (authorize()) page("settings", "Nastavení", PAGE_SETTINGS); });
+    server_.on("/wifi", HTTP_GET, [this]() { if (authorize()) page("wifi", "Wi-Fi", PAGE_WIFI); });
+    server_.on("/api/wifi/scan", HTTP_POST, [this]() { if (authorize(true)) scanWifi(true); });
+    server_.on("/api/wifi/scan", HTTP_GET, [this]() { if (authorize()) scanWifi(false); });
     server_.on("/time", HTTP_GET, [this]() { if (authorize()) page("time", "Čas", PAGE_TIME); });
     server_.on("/firmware", HTTP_GET, [this]() { if (authorize()) page("firmware", "Firmware", PAGE_FIRMWARE); });
     server_.on("/assets/app.css", HTTP_GET, [this]() { if (authorize()) server_.send_P(200, "text/css; charset=utf-8", WEB_CSS); });
@@ -85,7 +89,7 @@ void Service::page(const char *id, const char *title, const char *body) {
     server_.sendContent(String("<body data-page=\"") + id + "\"><header><a class=brand href=\"/\">T-Display</a><span>Monitor prostředí</span></header><nav aria-label=\"Hlavní navigace\">");
     struct Nav { const char *id, *path, *title; };
     const Nav nav[] = {{"overview","/","Přehled"},{"history","/history","Historie"},{"device","/device","Zařízení"},
-        {"settings","/settings","Nastavení"},{"time","/time","Čas"},{"firmware","/firmware","Firmware"}};
+        {"wifi","/wifi","Wi-Fi"},{"settings","/settings","Nastavení"},{"time","/time","Čas"},{"firmware","/firmware","Firmware"}};
     for (const auto &item : nav) server_.sendContent(String("<a href=\"") + item.path + "\"" +
         (strcmp(id, item.id) == 0 ? " aria-current=\"page\"" : "") + ">" + item.title + "</a>");
     server_.sendContent(String("</nav><main><h1>") + title + "</h1><div id=message role=status aria-live=polite></div>");
@@ -102,15 +106,17 @@ void Service::begin() {
     snprintf(token, sizeof(token), "%08lx%08lx%08lx%08lx", static_cast<unsigned long>(esp_random()),
         static_cast<unsigned long>(esp_random()), static_cast<unsigned long>(esp_random()), static_cast<unsigned long>(esp_random()));
     csrf_ = token;
-    if (!routes_) routes();
-    WiFi.persistent(false);
-    WiFi.mode(WIFI_STA);
-    // Service runs on external power: keep the radio responsive for HTTP/OTA.
-    // Battery mode stops Wi-Fi entirely before deep sleep.
-    WiFi.setSleep(false);
-    WiFi.setHostname(name_.c_str());
-    if (settings_.ssid.isEmpty()) startAP();
-    else WiFi.begin(settings_.ssid.c_str(), settings_.wifiPassword.c_str());
+    if (!routes_) {
+        WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+            if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED)
+                Serial.printf("[network] Disconnected reason=%u\n", info.wifi_sta_disconnected.reason);
+            else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) Serial.println("[network] Associated; waiting for IP");
+            else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) Serial.println("[network] IP acquired");
+        });
+        routes();
+    }
+    wifi_.begin(name_.c_str());
+    if (wifi_.exhausted()) startAP();
     started_ = millis();
     server_.begin();
     running_ = true;
@@ -124,8 +130,8 @@ void Service::stop() {
     server_.stop();
     MDNS.end();
     sntp_stop(); ntpStarted_ = false;
-    WiFi.disconnect(true, false);
-    WiFi.mode(WIFI_OFF);
+    wifi_.stop();
+    scanning_ = false;
     running_ = ap_ = connected_ = false;
 }
 bool Service::available() const { return ap_ || WiFi.status() == WL_CONNECTED; }
@@ -133,6 +139,10 @@ String Service::network() const { return ap_ ? name_ : WiFi.status() == WL_CONNE
 String Service::ip() const { return ap_ ? WiFi.softAPIP().toString() : WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "Waiting for network"; }
 void Service::poll() {
     if (!running_) return;
+    pollScan();
+    // A background scan may briefly change station status. Do not abort it
+    // with a reconnect; resume normal connection management when it finishes.
+    if (!scanning_) wifi_.poll();
     bool connected = WiFi.status() == WL_CONNECTED;
     if (connected && !connected_) {
         MDNS.begin(name_.c_str());
@@ -145,13 +155,13 @@ void Service::poll() {
     } else if ((!settings_.autoTime || !connected) && ntpStarted_) {
         sntp_stop(); ntpStarted_ = false;
     }
-    if (!ap_ && !connected && millis() - started_ > 15000) startAP();
+    if (!ap_ && !connected && (wifi_.exhausted() || millis() - started_ > 15000)) startAP();
     if (ntpStarted_) clock_.syncSystemTime();
     server_.handleClient();
     if (rebootAt_ && static_cast<int32_t>(millis() - rebootAt_) >= 0) ESP.restart();
 }
 void Service::status() {
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(6144);
     doc["version"] = FW_VERSION;
     doc["firmware_family"] = FIRMWARE_FAMILY;
     doc["variant"] = FORCE_SERVICE_MODE ? "bench-service" : USB_SENSE_WIRED ? "usb-sense" : "battery";
@@ -230,9 +240,61 @@ void Service::status() {
     config["interval_s"] = settings_.intervalS;
     config["screen_timeout_s"] = settings_.screenTimeoutS;
     config["brightness"] = settings_.brightness;
-    config["ssid"] = settings_.ssid;
+    config["ssid"] = settings_.wifi[0].ssid; // compatibility for old public exports
+    JsonArray profiles = config.createNestedArray("wifi_profiles");
+    for (const auto &p : settings_.wifi) {
+        JsonObject profile = profiles.createNestedObject();
+        profile["ssid"] = p.ssid; profile["hidden"] = p.hidden;
+        profile["has_password"] = !p.password.isEmpty();
+    }
     config["auth_enabled"] = settings_.authEnabled;
     config["auto_time"] = settings_.autoTime;
+    String json; serializeJson(doc, json);
+    server_.send(200, "application/json", json);
+}
+int Service::pollScan() {
+    int count = WiFi.scanComplete();
+    if (scanning_) {
+        if (count >= 0) scanning_ = false;
+        else if (millis() - scanAt_ >= 15000) {
+            esp_wifi_scan_stop(); scanning_ = false;
+            WiFi.scanDelete(); count = WIFI_SCAN_FAILED;
+        } else count = WIFI_SCAN_RUNNING;
+    }
+    return count;
+}
+void Service::scanWifi(bool start) {
+    if (updating()) { error(409, "Firmware update in progress"); return; }
+    int count = pollScan();
+    if (start && count != WIFI_SCAN_RUNNING) {
+        WiFi.scanDelete();
+        // Arduino 2.0.17 leaves home_chan_dwell_time uninitialized. Start
+        // the SDK scan with every field initialized; Arduino still collects
+        // its SCAN_DONE event/results for scanComplete()/SSID().
+        wifi_scan_config_t scan{};
+        scan.show_hidden = true;
+        scan.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+        scan.scan_time.active.min = 100;
+        scan.scan_time.active.max = 150;
+        scan.home_chan_dwell_time = 30;
+        count = esp_wifi_scan_start(&scan, false) == ESP_OK ? WIFI_SCAN_RUNNING : WIFI_SCAN_FAILED;
+        scanning_ = count == WIFI_SCAN_RUNNING;
+        scanAt_ = millis();
+    }
+    DynamicJsonDocument doc(4096);
+    doc["scanning"] = count == WIFI_SCAN_RUNNING;
+    JsonArray list = doc.createNestedArray("networks");
+    for (int i = 0; i < count && list.size() < 20; ++i) {
+        const String ssid = WiFi.SSID(i);
+        if (ssid.isEmpty()) continue; // hidden names are entered manually
+        bool duplicate = false;
+        for (JsonObject network : list) if (network["ssid"].as<String>() == ssid) { duplicate = true; break; }
+        if (duplicate) continue;
+        JsonObject network = list.createNestedObject();
+        network["ssid"] = ssid; network["rssi"] = WiFi.RSSI(i);
+        network["secure"] = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
+    }
+    if (count == WIFI_SCAN_FAILED) doc["error"] = "Scan failed or not started";
     String json; serializeJson(doc, json);
     server_.send(200, "application/json", json);
 }
@@ -322,10 +384,18 @@ void Service::csv() {
     server_.sendContent("");
 }
 void Service::configure() {
-    StaticJsonDocument<1536> doc;
-    if (server_.arg("plain").length() > 1536 || deserializeJson(doc, server_.arg("plain"))) { error(400, "Invalid JSON"); return; }
+    DynamicJsonDocument doc(6144);
+    if (server_.arg("plain").length() > 4096 || deserializeJson(doc, server_.arg("plain"))) { error(400, "Invalid JSON"); return; }
     Settings next = settings_;
     bool known = false;
+    if (doc.containsKey("wifi_profiles")) {
+        if (doc.containsKey("ssid") || doc.containsKey("wifi_password") || doc.containsKey("clear_wifi") ||
+            !doc["wifi_profiles"].is<JsonArray>() ||
+            !updateWifiProfiles(next, settings_, doc["wifi_profiles"].as<JsonArrayConst>())) {
+            error(400, "Invalid Wi-Fi profiles: five unique SSIDs, password or explicit open required for a new network"); return;
+        }
+        known = true;
+    }
     if (doc.containsKey("interval_s")) {
         if (!doc["interval_s"].is<uint32_t>()) { error(400, "Invalid interval"); return; }
         next.intervalS = doc["interval_s"]; known = true;
@@ -340,7 +410,11 @@ void Service::configure() {
     }
     if (doc.containsKey("ssid")) {
         if (!doc["ssid"].is<const char *>()) { error(400, "Invalid SSID"); return; }
-        next.ssid = doc["ssid"].as<String>(); known = true;
+        const String ssid = doc["ssid"].as<String>();
+        if (ssid != next.wifi[0].ssid && !doc.containsKey("wifi_password")) {
+            error(400, "Changing SSID requires its password; use the Wi-Fi tab"); return;
+        }
+        next.wifi[0].ssid = ssid; known = true;
     }
     if (doc.containsKey("auth_enabled")) {
         if (!doc["auth_enabled"].is<bool>()) { error(400, "Invalid authentication switch"); return; }
@@ -352,7 +426,7 @@ void Service::configure() {
     }
     if (doc.containsKey("wifi_password")) {
         if (!doc["wifi_password"].is<const char *>()) { error(400, "Invalid Wi-Fi password"); return; }
-        next.wifiPassword = doc["wifi_password"].as<String>();
+        next.wifi[0].password = doc["wifi_password"].as<String>();
         known = true;
     }
     if (doc.containsKey("admin_password")) {
@@ -360,7 +434,7 @@ void Service::configure() {
         next.adminPassword = doc["admin_password"].as<String>();
         known = true;
     }
-    if (doc["clear_wifi"] == true) { next.ssid = ""; next.wifiPassword = ""; known = true; }
+    if (doc["clear_wifi"] == true) { for (auto &p : next.wifi) p = WifiProfile{}; known = true; }
     if (!known) { error(400, "No configuration fields provided"); return; }
     if (!validSettings(next)) { error(400, "Values outside allowed ranges"); return; }
     if (!saveSettings(next)) { error(500, "Cannot save settings"); return; }

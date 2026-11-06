@@ -12,6 +12,8 @@
 #include "power.h"
 #include "display.h"
 #include "service.h"
+#include "network.h"
+#include <esp_system.h>
 #include "ota_guard.h"
 
 namespace {
@@ -158,6 +160,13 @@ void setup() {
     storage.begin();
     sensor.begin();
     service.setTick(sampleDue);
+    if (settingsOK && !power.external() && clockState.newSession() && settings.autoTime &&
+        !ota.trial() && esp_reset_reason() != ESP_RST_BROWNOUT) {
+        display.wake(settings.brightness);
+        display.message("Time synchronization", "Wi-Fi / NTP: max 83 s");
+        const auto result = syncBatteryTime(settings, clockState, power);
+        Serial.printf("[time] Battery startup: %s\n", batteryTimeResultName(result));
+    }
     if (power.external() && settingsOK) service.begin();
     sampleDue();
     const auto cause = esp_sleep_get_wakeup_cause();
@@ -177,6 +186,9 @@ void loop() {
             sensor.diagnose();
             reading = sensor.measure();
             render();
+        } else if (command == 'n') {
+            Serial.printf("[network] external=%d running=%d slot=%d status=%d ip=%s\n", power.external(),
+                service.running(), service.wifiIndex()+1, static_cast<int>(WiFi.status()), WiFi.localIP().toString().c_str());
         } else if (command == 'v') {
             logger::Record latest;
             if (storage.latest(latest)) {

@@ -28,6 +28,7 @@ public:
     bool equalsIgnoreCase(const String &s) const { return s_.size()==s.s_.size() && std::equal(s_.begin(),s_.end(),s.s_.begin(),[](char a,char b){return std::tolower(static_cast<unsigned char>(a))==std::tolower(static_cast<unsigned char>(b));}); }
     String &operator+=(char c) { s_+=c; return *this; }
     String &operator+=(const String &s) { s_+=s.s_; return *this; }
+    bool concat(const char *s) { s_+=s; return true; }
     std::string::const_iterator begin() const { return s_.begin(); }
     std::string::const_iterator end() const { return s_.end(); }
     char operator[](size_t i) const { return s_[i]; }

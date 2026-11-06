@@ -56,7 +56,7 @@ int main(){
         "POST /api/config HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\n{}",
         "POST /api/config HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n",
         "POST /api/config HTTP/1.1\r\nContent-Length: 4294967295\r\n\r\n",
-        post("/api/config",std::string(1537,'a')),
+        post("/api/config",std::string(4097,'a')),
         post("/api/update","{}"), // must not dereference an absent HTTPUpload
         post("/api/config","x","multipart/form-data; boundary=test"),
         "GET / HTTP/1.1\r\nX: "+std::string(1025,'x')+"\r\n\r\n",

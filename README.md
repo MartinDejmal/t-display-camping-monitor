@@ -6,7 +6,7 @@ Měří standardně jednou za minutu, ukládá historii do interní flash a mezi
 
 ## Stav
 
-Aktuálně **0.4.3**: finální varianta `ttgo-t-display-usb-sense` používá dělič VBUS na pinu **33**. Uživatel ověřil 2,42 V při USB a 0,12 V pouze na akumulátoru. Servis se zapíná automaticky na USB; na baterii se Wi-Fi vypne a mezi měřeními se používá deep sleep.
+Aktuálně **0.5.0**: pět Wi-Fi sítí v daném pořadí, samostatná záložka Wi-Fi se skenem a jednorázová synchronizace NTP po resetu na baterii. Varianta `ttgo-t-display-usb-sense` používá dělič VBUS na pinu **33**. Uživatel ověřil 2,42 V při USB a 0,12 V pouze na akumulátoru. Servis se zapíná automaticky na USB; po úvodním pokusu o NTP se na baterii Wi-Fi vypne a mezi měřeními se používá deep sleep.
 
 Verze **0.4.2** přidala na displeji symbol ° k teplotám a menším písmem min/max teploty, vlhkosti a tlaku z dochovaných platných vzorků aktuální relace. BMP vlhkost nezobrazuje. Reset založí novou relaci; deep sleep ji zachová. Čerstvé neuložené měření na displeji do těchto historických min/max nevstupuje.
 
@@ -107,17 +107,20 @@ Navigace obsahuje samostatné stránky, každá má vlastní URL a načte se ze 
 | Přehled | `/` | Aktuální hodnoty a základní stav |
 | Historie | `/history` | Teplota / tlak / vlhkost, min/max, 8 h / 24 h / 7 dní / 30 dní; výběr relace a CSV |
 | Zařízení | `/device` | Napájení, senzor, další měření, poslední zápis, počet a rozsah záznamů, úložiště, běh a rezerva paměti |
-| Nastavení | `/settings` | Měření, displej, síť, přístup, import/export bez hesel a restart |
+| Wi-Fi | `/wifi` | Pět sítí v pořadí, ruční/skryté SSID, Scan a výběr z dropdown menu |
+| Nastavení | `/settings` | Měření, displej, přístup, import/export bez hesel a restart |
 | Čas | `/time` | Stav UTC, NTP, nastavení z prohlížeče nebo provoz jen s relativním časem |
 | Firmware | `/firmware` | OTA souborem `.pio/build/<environment>/firmware.bin` |
 
 Interval lze nastavit na 60–3600 s, jas 1–255 a timeout 5–120 s. Historie nabízí posledních 64 uložených relací; úplné CSV zahrnuje i starší dochované relace.
 
-Konfigurace se validuje a zapisuje jako jediný NVS blob. Prázdné pole hesla ponechá existující heslo; otevřenou Wi-Fi lze nastavit explicitní prázdnou hodnotou přes API. Import nejprve vyplní formulář. Změna sítě a AP hesla vyžaduje restart; webové heslo platí ihned. Dlouhé vlastní heslo displej nevypisuje celé.
+Konfigurace se validuje a zapisuje jako jediný NVS blob. V záložce Wi-Fi se zkoušejí neprázdné pozice 1–5 postupně, každá nejvýše 15 s. Prázdné SSID pozici vypne. Prázdné heslo ponechá známé heslo podle SSID i při přesunu do jiné pozice; nová chráněná síť vyžaduje heslo. Otevřená síť se označuje výslovně. Skryté SSID lze zadat ručně; připojení nevyžaduje jeho nalezení skenem. Scan běží na USB asynchronně a nabízí nejvýše 20 různých pojmenovaných sítí; výběr předvyplní SSID, chráněnost a případné uložené označení skryté sítě. Krátký výpadek HTTP při skenu web zkusí překlenout opakováním.
+
+Import/export nezahrnuje hesla. Import nejprve zobrazí náhled. Hesla známých SSID se zachovají; nové chráněné sítě je třeba nejprve uložit s heslem v záložce Wi-Fi. Změna sítí se plně projeví po restartu; webové heslo platí ihned. Dlouhé vlastní heslo displej nevypisuje celé. Staré nastavení jedné sítě se načte do první pozice. Konfigurační formát v2 a OTA značka `CONFIG=2` brání běžnému OTA návratu k firmwaru, který pět sítí neumí; první přechod z 0.4.x vyžaduje USB nahrání.
 
 HTTP Basic autentizace je ve výchozím stavu zapnutá a lze ji vypnout v Nastavení → Přístup k webu. Přepínač platí i pro CSV a OTA; heslo webu a chráněného AP se zachová, AP tím nevznikne otevřené. Náhodný CSRF token se pro změny vyžaduje i bez přihlášení. POST vyžadují servisní napájení. HTTP nemá TLS; rozhraní je určeno do důvěryhodné místní sítě, nikoli k vystavení na internet.
 
-HTTP příjem má omezené délky a čas: JSON do 1536 B, běžný požadavek nejvýše 3 s, OTA nejvýše 180 s a 10 s bez příchozích dat. OTA přijímá jeden soubor `firmware` a streamuje ho po blocích. Zápisy do klienta mají také časový limit; klient, který přestane číst, se odpojí a neúplný CSV/JSON přenos se nevydává za dokončený.
+HTTP příjem má omezené délky a čas: JSON do 4096 B (buffer na haldě podle skutečné velikosti), běžný požadavek nejvýše 3 s, OTA nejvýše 180 s a 10 s bez příchozích dat. OTA přijímá jeden soubor `firmware` a streamuje ho po blocích. Zápisy do klienta mají také časový limit; klient, který přestane číst, se odpojí a neúplný CSV/JSON přenos se nevydává za dokončený.
 
 ## Historie, čas a baterie
 
@@ -128,6 +131,8 @@ Minutový interval: 34 560 B/den, přibližně 1,04 MB/30 dní plus režie. Nejs
 **Správné datum není podmínkou správného měření, intervalů ani historie.** Plán a grafy používají monotónně uplynulé sekundy v jedné relaci. RTC čas pokračuje přes deep sleep, včetně předčasného probuzení tlačítkem. Změna UTC plán neposune.
 
 UTC je volitelný popisek získaný NTP nebo z prohlížeče. NTP lze vypnout a tlačítkem „Používat jen relativní čas“ také odstranit aktuální UTC. Záznamy bez UTC se zpětně nepřepisují; CSV ponechá datum prázdné. Dříve uložené datum se změnou nastavení nemění.
+
+Po resetu nebo zapnutí na baterii proběhne jeden pokus o NTP při zapnuté automatické synchronizaci: nejvýše 15 s na každou z pěti sítí a dalších 8 s na odpověď NTP, celkem nejvýše 83 s. První vzorek se uloží až po tomto pokusu; další měření pokračují v pravidelném intervalu. Pokus vyžaduje známé napětí alespoň 3,50 V, vynechá se po brownoutu a při nepotvrzeném OTA startu. Při poklesu pod 3,40 V nebo připojení USB se ukončí. Po dokončení se rádio vypne; na baterii nevzniká AP ani web. Při časovaném ani tlačítkovém probuzení z deep sleep se pokus neopakuje. Nedostupná Wi-Fi/NTP neblokuje následné měření. Na USB se sítě zkoušejí také v pořadí; při neúspěchu zůstane záložní AP a další cyklus připojování začne po 60 s.
 
 Po resetu/odpojení baterie vznikne nová relace. Délku vypnutí bez externích hodin nelze zjistit, proto se různé relace nespojují do zdánlivě souvislého grafu ani podle UTC. Starší relaci lze vybrat i bez data; její graf končí posledním uloženým vzorkem. CSV za rozsah filtruje podle relativního času vybrané relace, úplné CSV zachová všechny. Výpadky a chyby senzoru vytvářejí mezery.
 
@@ -160,7 +165,7 @@ pio run -e ttgo-t-display -e ttgo-t-display-usb-sense -e ttgo-t-display-service
 python tools/check.py
 ```
 
-Host kontroly potřebují C++11 `g++` a Node.js; mimo PATH použij `--cxx <cesta>` a `--node <cesta>`. Spouštějí skutečný kód formátu, hodin, plánování a úložiště nad souborovým testovacím prostředím a skutečný JS webu nad simulovaným API. Nepotvrzují chování flash, ADC, Wi-Fi ani spánku na ESP32.
+Host kontroly potřebují C++11 `g++` a Node.js; mimo PATH použij `--cxx <cesta>` a `--node <cesta>`. Spouštějí skutečný kód formátu, hodin, plánování, úložiště, konfigurace a síťového automatu nad souborovým testovacím prostředím a skutečný JS webu nad simulovaným API. Nepotvrzují chování flash, ADC, Wi-Fi ani spánku na ESP32.
 
 GitHub Actions sestaví všechny varianty, provede kontroly a uloží firmware, bootloader a tabulku oddílů jako artefakty. Viz [plán ověření na desce](docs/VALIDATION.md) a [přehled implementace](docs/IMPLEMENTATION.md).
 

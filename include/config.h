@@ -19,7 +19,7 @@
 #endif
 // Compatibility marker, not a cryptographic signature. Used by web OTA preflight.
 constexpr char FIRMWARE_FAMILY[] = "|TDLOGGER:ORIGINAL:USB=" LOGGER_STRINGIFY(USB_SENSE_WIRED)
-    ":BENCH=" LOGGER_STRINGIFY(FORCE_SERVICE_MODE) ":RECORD=2:PART=1" LOGGER_SENSE_MARKER "|";
+    ":BENCH=" LOGGER_STRINGIFY(FORCE_SERVICE_MODE) ":RECORD=2:PART=1:CONFIG=2" LOGGER_SENSE_MARKER "|";
 constexpr uint32_t DEFAULT_INTERVAL_S = 60;
 constexpr uint32_t HISTORY_SECONDS = 30UL * 86400;
 constexpr uint32_t GRAPH_SECONDS = 8UL * 3600;
@@ -31,13 +31,18 @@ constexpr uint32_t LOW_BATTERY_RECHECK_S = 900;
 constexpr uint32_t BLOCK_RECORDS = 1440;
 constexpr float LOW_BATTERY_V = 3.40f; // calibrate on actual board
 constexpr float OTA_MIN_BATTERY_V = 3.65f;
+constexpr size_t WIFI_PROFILE_COUNT = 5;
+struct WifiProfile {
+    String ssid;
+    String password;
+    bool hidden = false;
+};
 struct Settings {
     uint32_t intervalS = DEFAULT_INTERVAL_S;
     uint16_t screenTimeoutS = 15;
     uint8_t brightness = 120;
     bool authEnabled = true;
     bool autoTime = true;
-    String ssid;
-    String wifiPassword;
+    WifiProfile wifi[WIFI_PROFILE_COUNT];
     String adminPassword;
 };

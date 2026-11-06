@@ -25,12 +25,14 @@ uint32_t checksum() {
 }
 }
 void ClockState::begin() {
+    newSession_ = false;
     bootUs = esp_timer_get_time();
     if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED &&
         rtc.magic == MAGIC && rtc.crc == checksum() && wallUs() >= rtc.sleepWallUs) {
         // Actual elapsed RTC time: a button may wake much earlier than the timer.
         rtc.baseUs = logger::resumeElapsed(rtc.baseUs, rtc.sleepWallUs, wallUs());
     } else {
+        newSession_ = true;
         Preferences p;
         p.begin("clock", false);
         const uint32_t session = p.getUInt("session", 0) + 1;

@@ -104,6 +104,17 @@ Výsledek potvrzuje měření, ukládání a obsluhu webu v tomto konkrétním b
 - Při USB je `battery_v=null` záměrně: ADC měří společnou napájecí větev. Samotné napětí baterie se čte až při bateriovém provozu. Fyzické odpojení USB a automatický přechod nové sestavy na baterii zatím nebyly agentem přímo pozorovány; měřené vstupní napětí bez USB potvrdil uživatel.
 - Lokální podklady: `work/usb33-build.log`, `work/usb33-checks.log`, `work/usb33-upload.log`, `work/usb33-live.json`.
 
+## Pět Wi-Fi sítí a bateriové NTP ve 0.5.0 — 6. 11. 2026
+
+- Všechny tři varianty se sestavily; host kontroly prošly. Nativní testy spouštějí skutečné `network.cpp` a `settings.cpp` (ArduinoJson 6.21.5): pořadí pěti sítí, přímé připojení bez podmínky skenu, timeouty, 60s retry, přetečení millis, opožděné připojení poslední sítě, chybné NTP, nízká baterie a připojení USB. Nejdelší simulovaný pokus s odpovědí připojení těsně před limitem a timeoutem NTP trvá 82,9 s; rádio je po bateriovém pokusu vždy vypnuté. Hodiny rozliší novou relaci od deep sleep.
+- Konfigurační testy ověřily v1 → v2 bez předčasného přepisu NVS, pět profilů, přesun známého SSID se zachováním hesla, výslovně otevřenou síť, validaci, maximální délky a neúspěšný atomický zápis. Webové testy ověřily sedm samostatných stránek, Scan/dropdown, ruční skryté SSID, CSRF, zachování hesla i retry po přechodné chybě HTTP. HTTP parser přijímá nejvýše 4096 B JSON; tělo alokuje na haldě podle skutečné velikosti.
+- Na COM14 nahrána finální varianta `usb-sense` 0.5.0 s ověřením hashů. Zachována původní síť, heslo, vypnuté přihlášení, interval/displej/auto_time i historie: předaktualizační CSV je přesným prefixem exportu po změně. Veřejný status obsahuje pět profilů a pouze `has_password`, žádná síťová hesla.
+- Skutečný API test: do první pozice dočasně uloženo neexistující SSID, původní síť přesunuta do druhé bez opětovného zadání hesla. Po restartu se deska připojila přes druhou síť. Poté byla původní síť vrácena na první místo, zbylé čtyři pozice vyprázdněny a po dalším restartu ověřeno připojení i senzor. Zkušební SSID není v konečné konfiguraci.
+- Skutečný scan API našel osm pojmenovaných sítí. V prohlížeči na `/wifi` další scan našel sedm sítí; všech pět dropdownů se naplnilo. Výběr do páté pozice předvyplnil SSID a výzvu k heslu; změna formuláře nebyla uložena. Uložené heslo se ve formuláři nezobrazuje. Automatické NTP na USB nastavilo platný čas, BMP085/180 dále měří a ukládá.
+- Při vývoji nalezen předčasný timeout skenu a neinicializované `home_chan_dwell_time` v připnutém Arduino WiFiScan. Finální kód zahajuje asynchronní SDK scan s kompletně nulovanou konfigurací, 30ms návratem na domácí kanál a vlastním 15s limitem; Arduino přebírá událost s výsledky. Během skenu se nespouští reconnect a web překlene přechodné chyby dotazu. Síťový pokus prodloužen z původních 8 na 15 s; USB při čekání na retry zbytečně neruší poslední rozpracované připojení/DHCP.
+- Fyzický reset pouze na akumulátoru s novým jednorázovým NTP ani přístup k AP prokazatelně nastavenému jako skrytý nebyly při připojeném USB přímo ověřeny. Jejich řídicí logika prošla host testy. Tento test nepotvrzuje bateriovou výdrž.
+- Lokální podklady: `work/wifi-build-all.log`, `work/wifi-checks.log`, `work/wifi-upload.log`, `work/wifi-before.csv`, `work/wifi-after.csv`, `work/wifi-live-check.log`, `work/wifi-restore.log`, `work/wifi-live.json`, `work/wifi-final-connect-trace.log`.
+
 ## Před pájením: USB a servisní varianta — kontrolní body
 
 - [x] Nahrát `ttgo-t-display-service` přes USB s novou tabulkou oddílů.

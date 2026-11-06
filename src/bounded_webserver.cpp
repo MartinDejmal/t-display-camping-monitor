@@ -2,9 +2,10 @@
 #include <algorithm>
 #include <lwip/sockets.h>
 #include <errno.h>
+#include <new>
 
 namespace {
-constexpr size_t MAX_JSON = 1536;
+constexpr size_t MAX_JSON = 4096;
 constexpr size_t MAX_MULTIPART = 0x160000 + 4096; // pinned OTA slot plus envelope
 bool decimal(const String &s, size_t &value) {
     if (s.isEmpty() || s.length() > 10) return false;
@@ -204,12 +205,14 @@ bool BoundedWebServer::parse() {
     const int parameter = contentType.indexOf(';');
     const String mediaType = parameter < 0 ? contentType : contentType.substring(0, parameter);
     if (!contentType.isEmpty() && !mediaType.equalsIgnoreCase("application/json")) return reject(415, "Use application/json");
-    uint8_t body[MAX_JSON + 1]; const size_t size = remaining_;
-    if (!bytes(body, size)) return reject(408, "Request body timed out");
-    if (memchr(body, 0, size)) return reject(400, "Invalid JSON body");
+    const size_t size = remaining_;
+    std::unique_ptr<uint8_t[]> body(new (std::nothrow) uint8_t[size + 1]);
+    if (!body) return reject(503, "Insufficient memory");
+    if (!bytes(body.get(), size)) return reject(408, "Request body timed out");
+    if (memchr(body.get(), 0, size)) return reject(400, "Invalid JSON body");
     body[size] = 0;
     _currentArgs[_currentArgCount].key = "plain";
-    _currentArgs[_currentArgCount++].value = reinterpret_cast<const char *>(body);
+    _currentArgs[_currentArgCount++].value = reinterpret_cast<const char *>(body.get());
     return true;
 }
 void BoundedWebServer::handleClient() {

@@ -10,10 +10,10 @@
 | 6. Ovládání | Tlačítka, timeout, nezávislý plán, nízká baterie | Debounce, držené tlačítko, ADC |
 | 7. Graf | T + RH nebo tlak, 8 h, min/max, mezery | Čitelnost |
 | 8. Servis | STA + AP, hystereze VBUS, návrat na baterii | Přechody napájení a sítě |
-| 9. Web | Šest samostatných stránek, historie relací, stav, CSV, konfigurace, čas, volitelné přihlášení | Reálný prohlížeč a souběh exportu |
+| 9. Web | Sedm samostatných stránek, pět prioritních sítí a sken, historie relací, stav, CSV, konfigurace, čas, volitelné přihlášení | Reálný prohlížeč a souběh exportu |
 | 10. OTA a výdrž | Dual slot, aplikační guard, CI a host testy | Skutečné OTA/rollback, spotřeba a 72 h |
 
-Aktuální varianta 0.4.3 s detekcí USB na pinu 33 je nahraná na COM14. BMP085/180 měří a ukládá; konfigurace a historie se načetly. Ověřeny změna UTC bez posunu měření, skutečný deep sleep a úspěšná/přerušená OTA včetně návratu po nepotvrzeném startu. Podrobnosti jsou v VALIDATION.md. Aplikační guard má omezení popsaná v README.
+Aktuální varianta 0.5.0 s detekcí USB na pinu 33 je nahraná na COM14. BMP085/180 měří a ukládá; konfigurace a historie se načetly. Ověřeny změna UTC bez posunu měření, skutečný deep sleep a úspěšná/přerušená OTA včetně návratu po nepotvrzeném startu. Podrobnosti jsou v VALIDATION.md. Aplikační guard má omezení popsaná v README.
 
 ## Moduly
 
@@ -24,7 +24,8 @@ Aktuální varianta 0.4.3 s detekcí USB na pinu 33 je nahraná na COM14. BMP085
 - `storage.*`: LittleFS, blokový log, obnova, retence podle relativního času, agregace T/RH/P a líně vytvářený souhrn historie/posledních 64 relací. Bateriové starty souhrn zbytečně neskenují.
 - `power.*`: VBUS a měření společné napájecí větve.
 - `display.*`: ST7789, hodnoty, graf a servisní informace.
-- `settings.*`: konfigurace v jednom NVS blobu.
+- `settings.*`: konfigurace v jednom NVS blobu, migrace v1 → v2, pět profilů a zachování hesla podle SSID.
+- `network.*`: pořadové připojování bez podmínky skenu, časové limity, jednorázové bateriové NTP a vypnutí rádia.
 - `bounded_webserver.*`: omezený GET/JSON parser a blokový příjem jediného multipart firmwaru; délkové/časové limity a omezené socketové zápisy. Používá routování, Basic a odpovědi připnutého Arduino WebServeru bez jeho úpravy.
 - `service.*`, `web_ui.h`: Wi-Fi, HTTP API a web bez internetových závislostí.
 - `ota_guard.*`, `ota_marker.h`: zkušební boot a kontrola kompatibility.
@@ -35,14 +36,15 @@ Při `auth_enabled=true` všechny endpointy vyžadují Basic přihlášení `adm
 
 | Metoda | Cesta | Obsah |
 |---|---|---|
-| GET | `/`, `/history`, `/device`, `/settings`, `/time`, `/firmware` | Samostatné stránky s navigačními záložkami |
+| GET | `/`, `/history`, `/device`, `/wifi`, `/settings`, `/time`, `/firmware` | Samostatné stránky s navigačními záložkami |
 | GET | `/assets/app.css`, `/assets/app.js` | Společné lokální prostředky |
 | GET | `/api/status` | Hodnoty, čidlo, napájení, čas/relace, další měření, poslední zápis a platné měření, počty/rozsah historie, kapacita, veřejná konfigurace a CSRF; nedostupná humidity=null |
 | GET | `/api/history?hours=8&session=N` | 480 košů: minT,maxT,minRH,maxRH,session,minP_hPa,maxP_hPa; výpadek=null, chybějící RH=null na jejích pozicích. Session volitelná, výchozí aktuální. Metadata time_basis=session_elapsed, reference_elapsed_s |
 | GET | `/api/sessions` | Celkový počet a posledních 64 relací s počty a rozsahem elapsed/UTC |
 | GET | `/api/export.csv` | Vše včetně chyb senzoru |
 | GET | `/api/export.csv?hours=24` | Rozsah relativního času aktuální nebo zadané relace (session=N); 1–720 hodin |
-| POST | `/api/config` | Částečná změna: interval_s, screen_timeout_s, brightness, ssid, auth_enabled, auto_time, wifi_password, admin_password, clear_wifi; ostatní pole se zachovají |
+| POST | `/api/config` | Částečná změna: interval_s, screen_timeout_s, brightness, wifi_profiles (pět objektů ssid/hidden/password/open), ssid (legacy), auth_enabled, auto_time, wifi_password, admin_password, clear_wifi; ostatní pole se zachovají |
+| POST / GET | `/api/wifi/scan` | Spuštění / stav asynchronního skenu; networks obsahuje nejvýše 20 objektů ssid/rssi/secure. POST vyžaduje CSRF a USB. |
 | POST | `/api/time` | `{ "epoch": <UTC seconds> }` nebo `{ "clear": true }` (vymaže UTC a vypne NTP, zachová monotónní čas) |
 | POST | `/api/restart` | Restart po odeslání odpovědi |
 | POST | `/api/update` | Multipart soubor v poli firmware |
@@ -58,3 +60,12 @@ Ve 0.4.2 `session_minmax` ve statusu obsahuje `temperature_min`, `temperature_ma
 Běžný HTTP požadavek má limit 3 s, jednotlivý socketový zápis 1,5 s. Při OTA se měření záměrně pozastaví; při 10 s bez příchozích dat nebo celkem 180 s se přenos přeruší a původní aplikace pokračuje.
 
 Od 0.4.3 USB varianta přidává do kompatibilitní značky `SENSE=33`. Přechod ze servisní varianty nebo starého zapojení GPIO32 se provádí přes USB. Vynucený servisní build zůstává samostatnou zkušební variantou.
+
+
+## Wi-Fi a NTP od 0.5.0
+
+Pořadí sítí určuje pole pěti profilů; prázdné SSID pozici vypne. Připojení zkouší každou známou síť přímo, včetně skrytého SSID, bez předchozího filtru podle skenu. Přesun známého SSID s vynechaným/prázdným heslem zachová jeho původní tajemství. Nový SSID vyžaduje heslo nebo `open:true`; explicitní otevřená síť heslo odstraní. Veřejný status/export obsahuje pouze `has_password`, nikdy heslo. Profilová a legacy pole nelze v jednom požadavku míchat. Konfigurace v2 se zapisuje jako jediný blob; v1 se nejprve převádí pouze v RAM.
+
+Nová bateriová relace zkusí NTP před prvním vzorkem: 5 × 15 s Wi-Fi, nejvýše 8 s NTP, celkový strop 83 s. Platí při auto_time=true, známém napětí ≥3,50 V a mimo brownout/nepotvrzený OTA start. Rádio se vždy vypne. Deep sleep relaci zachová a nové spojení nevyvolá. Skutečná odpověď SNTP callbacku je podmínkou synchronizace; starý systémový čas se za novou odpověď nevydává.
+
+Sken se obsluhuje asynchronně s vlastním 15s limitem; během něj se nespouští reconnect. Předčasné WIFI_SCAN_FAILED z Arduino knihovny se do vypršení tohoto limitu nepovažuje za dokončený sken. Web při přechodném výpadku HTTP opakuje dotaz; výběr výsledku vyplní pole ručně editovatelného SSID. Prázdné názvy skrytých sítí se v nabídce neobjevují.

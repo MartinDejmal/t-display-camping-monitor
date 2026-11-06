@@ -36,7 +36,7 @@ def partitions():
         usb = int(image.parent.name.endswith("usb-sense"))
         bench = int(image.parent.name.endswith("service"))
         sense = ":SENSE=33" if usb else ""
-        marker = f"|TDLOGGER:ORIGINAL:USB={usb}:BENCH={bench}:RECORD=2:PART=1{sense}|".encode()
+        marker = f"|TDLOGGER:ORIGINAL:USB={usb}:BENCH={bench}:RECORD=2:PART=1:CONFIG=2{sense}|".encode()
         assert marker in image.read_bytes(), f"Missing OTA compatibility marker: {image}"
         print(f"Image {image.parent.name}: {image.stat().st_size} / {slots[0]} bytes")
     print("Partitions: aligned, non-overlapping, dual OTA, 30-day payload fits")
@@ -75,6 +75,20 @@ def main():
                     str(ROOT / "tests/http_test.cpp"), str(ROOT / "src/bounded_webserver.cpp"),
                     "-o", str(http_exe)], check=True, env=compiler_env)
     subprocess.run([str(http_exe)], check=True, env=compiler_env)
+    network_exe = work / ("network-test.exe" if sys.platform == "win32" else "network-test")
+    subprocess.run([args.cxx, "-std=c++11", "-Wall", "-Wextra", "-static",
+                    "-I", str(ROOT / "tests/network_fakes"), "-I", str(ROOT / "include"),
+                    str(ROOT / "tests/network_test.cpp"), str(ROOT / "src/network.cpp"),
+                    "-o", str(network_exe)], check=True, env=compiler_env)
+    subprocess.run([str(network_exe)], check=True, env=compiler_env)
+    settings_exe = work / ("settings-test.exe" if sys.platform == "win32" else "settings-test")
+    subprocess.run([args.cxx, "-std=c++11", "-Wall", "-Wextra", "-static",
+                    "-DARDUINOJSON_ENABLE_ARDUINO_STRING=1", "-DARDUINOJSON_ENABLE_ARDUINO_STREAM=0", "-DARDUINOJSON_ENABLE_ARDUINO_PRINT=0",
+                    "-I", str(ROOT / "tests/settings_fakes"), "-I", str(ROOT / "tests/fakes"), "-I", str(ROOT / "include"),
+                    "-I", str(ROOT / ".pio/libdeps/ttgo-t-display-usb-sense/ArduinoJson/src"),
+                    str(ROOT / "tests/settings_test.cpp"), str(ROOT / "src/settings.cpp"),
+                    "-o", str(settings_exe)], check=True, env=compiler_env)
+    subprocess.run([str(settings_exe)], check=True, env=compiler_env)
     ui = (ROOT / "include/web_ui.h").read_text(encoding="utf-8")
     source = re.search(r'const char WEB_JS\[\] PROGMEM = R"JS\((.*?)\)JS";', ui, re.S).group(1)
     (work / "ui.js").write_text(source, encoding="utf-8")

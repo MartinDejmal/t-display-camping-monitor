@@ -13,4 +13,7 @@ struct ClockState {
     void clearUtc();
     void syncSystemTime();
     void prepareSleep();
+    bool newSession() const { return newSession_; }
+private:
+    bool newSession_ = false;
 };
